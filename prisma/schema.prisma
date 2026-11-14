@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Supabase Transaction Pooler (?pgbouncer=true)
+  directUrl = env("DIRECT_URL")   // Koneksi langsung khusus prisma migrate
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  SUPERVISOR
+}
+enum ProjectStatus {
+  PERSIAPAN
+  BERJALAN
+  SELESAI
+}
+enum WeatherType {
+  CERAH
+  BERAWAN
+  HUJAN
+}
+enum ReportType {
+  WORK
+  NO_WORK
+}
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  username     String    @unique
+  phone        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role
+  jobTitle     String    @default("Supervisor") @map("job_title")
+  isActive     Boolean   @default(true) @map("is_active")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  refreshTokens     RefreshToken[]
+  supervisorAssigns AreaAssignment[] @relation("SupervisorAssignments")
+  assignedByRecords AreaAssignment[] @relation("AssignedByUser")
+  submittedReports  DailyReport[]    @relation("SupervisorReports")
+  revisedReports    DailyReport[]    @relation("RevisedByOwner")
+  uploadedPhotos    ReportPhoto[]
+  reportRevisions   ReportRevision[]
+  reportUnlocks     ReportUnlock[]
+  @@index([role, isActive])
+  @@map("users")
+}
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+model Project {
+  id              String        @id @default(uuid())
+  code            String        @unique
+  name            String
+  location        String
+  clientName      String        @map("client_name")
+  startDate       DateTime      @map("start_date") @db.Date /// Lihat BR-07
+  endDate         DateTime?     @map("end_date") @db.Date   /// Lihat BR-07
+  status          ProjectStatus @default(PERSIAPAN)
+  timezone        String        @default("Asia/Jakarta")     /// Lihat BR-18 & NFR-04
+  routineHolidays Int[]         @default([0]) @map("routine_holidays") /// 0=Minggu..6=Sabtu, Lihat BR-11
+  deletedAt       DateTime?     @map("deleted_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  areas           Area[]
+  @@index([status, deletedAt])
+  @@map("projects")
+}
+
+model Area {
+  id          String           @id @default(uuid())
+  projectId   String           @map("project_id")
+  code        String
+  name        String
+  deletedAt   DateTime?        @map("deleted_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  project     Project          @relation(fields: [projectId], references: [id])
+  assignments AreaAssignment[]
+  reports     DailyReport[]
+  unlocks     ReportUnlock[]
+  @@unique([projectId, code]) /// Lihat BR-13
+  @@index([projectId, deletedAt])
+  @@map("areas")
+}
+
+model AreaAssignment {
+  id           String    @id @default(uuid())
+  areaId       String    @map("area_id")
+  supervisorId String    @map("supervisor_id")
+  startDate    DateTime  @map("start_date") @db.Date /// Lihat BR-10
+  endDate      DateTime? @map("end_date") @db.Date   /// null = aktif, Lihat BR-08 & BR-10
+  assignedById String    @map("assigned_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  area         Area      @relation(fields: [areaId], references: [id])
+  supervisor   User      @relation("SupervisorAssignments", fields: [supervisorId], references: [id])
+  assignedBy   User      @relation("AssignedByUser", fields: [assignedById], references: [id])
+  /// Partial unique index uq_active_area_assignment ada di migrasi SQL (BR-08)
+  @@index([supervisorId, endDate])
+  @@index([areaId, startDate, endDate])
+  @@map("area_assignments")
+}
+
+model DailyReport {
+  id               String           @id @default(uuid())
+  reportNumber     String           @unique @map("report_number") /// Lihat BR-13
+  areaId           String           @map("area_id")
+  supervisorId     String           @map("supervisor_id")
+  reportDate       DateTime         @map("report_date") @db.Date /// Tanggal bisnis zona project, Lihat BR-14
+  reportType       ReportType       @default(WORK) @map("report_type")
+  status           ReportStatus     @default(DRAFT)
+  progressText     String?          @map("progress_text")
+  obstaclesText    String?          @map("obstacles_text")
+  tomorrowPlanText String?          @map("tomorrow_plan_text")
+  weather          WeatherType?
+  workerCount      Int?             @map("worker_count")
+  noWorkReason     String?          @map("no_work_reason")     /// Lihat BR-19
+  locationText     String?          @map("location_text")      /// Lihat BR-16
+  submittedAt      DateTime?        @map("submitted_at")
+  isLate           Boolean          @default(false) @map("is_late") /// Lihat BR-18 & BR-21
+  signedByName     String?          @map("signed_by_name")     /// Lihat BR-26
+  signedByTitle    String?          @map("signed_by_title")    /// Lihat BR-26
+  isRevised        Boolean          @default(false) @map("is_revised") /// Lihat BR-24
+  revisionNo       Int              @default(0) @map("revision_no")
+  revisedAt        DateTime?        @map("revised_at")
+  revisedById      String?          @map("revised_by_id")
+  archivedAt       DateTime?        @map("archived_at")        /// [PENDING BR-25]
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  area             Area             @relation(fields: [areaId], references: [id])
+  supervisor       User             @relation("SupervisorReports", fields: [supervisorId], references: [id])
+  revisedBy        User?            @relation("RevisedByOwner", fields: [revisedById], references: [id])
+  photos           ReportPhoto[]
+  revisions        ReportRevision[]
+  @@unique([areaId, reportDate]) /// Lihat BR-14
+  @@index([supervisorId, isLate])
+  @@index([reportDate, status])
+  @@map("daily_reports")
+}
+
+model ReportPhoto {
+  id           String      @id @default(uuid())
+  reportId     String      @map("report_id")
+  storageKey   String      @map("storage_key")
+  caption      String?
+  sortOrder    Int         @map("sort_order")
+  takenAt      DateTime?   @map("taken_at")
+  uploadedById String      @map("uploaded_by_id")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  report       DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+  @@index([reportId, sortOrder])
+  @@map("report_photos")
+}
+model ReportRevision {
+  id                   String      @id @default(uuid())
+  reportId             String      @map("report_id")
+  revisionNo           Int         @map("revision_no")
+  revisedById          String      @map("revised_by_id")
+  changeSummary        String      @map("change_summary")
+  previousSnapshotJson Json        @map("previous_snapshot_json") /// Snapshot JSON utuh sebelum revisi, Lihat ADR-05 & BR-24
+  createdAt            DateTime    @default(now()) @map("created_at")
+  report               DailyReport @relation(fields: [reportId], references: [id])
+  revisedBy            User        @relation(fields: [revisedById], references: [id])
+  @@unique([reportId, revisionNo])
+  @@map("report_revisions")
+}
+model ReportUnlock {
+  id                  String   @id @default(uuid())
+  areaId              String   @map("area_id")
+  unlockedById        String   @map("unlocked_by_id")
+  unlockedThroughDate DateTime @map("unlocked_through_date") @db.Date /// Lihat BR-22
+  reason              String
+  createdAt           DateTime @default(now()) @map("created_at")
+  area                Area     @relation(fields: [areaId], references: [id])
+  unlockedBy          User     @relation(fields: [unlockedById], references: [id])
+  @@index([areaId, createdAt])
+  @@map("report_unlocks")
+}
