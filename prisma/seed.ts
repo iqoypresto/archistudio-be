@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { ProjectStatus, Role } from "@prisma/client";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { prisma } from "../src/configs/prisma-client.config.js";
 
 /** Membuat atau memperbarui satu akun user internal secara idempoten. */
