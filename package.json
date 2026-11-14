@@ -19,7 +19,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "latest",
     "@aws-sdk/s3-request-presigner": "latest",
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "^6.19.3",
     "bcrypt": "latest",
     "cors": "latest",
     "dotenv": "latest",
@@ -42,7 +42,7 @@
     "@types/pdfmake": "latest",
     "@types/supertest": "latest",
     "eslint": "latest",
-    "prisma": "^6.0.0",
+    "prisma": "^6.19.3",
     "supertest": "latest",
     "tsx": "latest",
     "typescript": "latest",
