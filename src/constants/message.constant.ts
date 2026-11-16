@@ -22,6 +22,14 @@ export const PROJECT_MESSAGES = {
   ARCHIVED: "Project berhasil diarsipkan.",
 } as const;
 
+export const AREA_MESSAGES = {
+  LIST_FETCHED: "Daftar area berhasil diambil.",
+  CREATED: "Area baru berhasil dibuat.",
+  UPDATED: "Data area berhasil diperbarui.",
+  ASSIGNMENT_CREATED: "Penugasan supervisor berhasil diperbarui.",
+  ASSIGNMENTS_FETCHED: "Riwayat penugasan supervisor berhasil diambil.",
+} as const;
+
 export const COMMON_MESSAGES = {
   HEALTH_OK: "Layanan API ArchiStudio berjalan normal.",
   FETCHED: "Data berhasil diambil.",
