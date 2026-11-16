@@ -14,6 +14,14 @@ export const USER_MESSAGES = {
   STATUS_UPDATED: "Status pengguna berhasil diperbarui.",
 } as const;
 
+export const PROJECT_MESSAGES = {
+  LIST_FETCHED: "Daftar project berhasil diambil.",
+  DETAIL_FETCHED: "Detail project berhasil diambil.",
+  CREATED: "Project berhasil dibuat.",
+  UPDATED: "Data project berhasil diperbarui.",
+  ARCHIVED: "Project berhasil diarsipkan.",
+} as const;
+
 export const COMMON_MESSAGES = {
   HEALTH_OK: "Layanan API ArchiStudio berjalan normal.",
   FETCHED: "Data berhasil diambil.",

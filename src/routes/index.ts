@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { COMMON_MESSAGES } from "../constants/message.constant.js";
 import { authRouter } from "../features/auth/auth.route.js";
+import { projectRouter } from "../features/project/project.route.js";
 import { userRouter } from "../features/user/user.route.js";
 import { ResponseHelper } from "../helpers/response.helper.js";
 
@@ -12,3 +13,4 @@ apiRouter.get("/health", (_req, res) => {
 
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/users", userRouter);
+apiRouter.use("/projects", projectRouter);
