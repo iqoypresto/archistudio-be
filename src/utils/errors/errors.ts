@@ -82,6 +82,16 @@ export const AppErrors = {
     status: StatusCodes.BAD_REQUEST,
     message: "Tanggal selesai project tidak boleh lebih awal dari tanggal mulai.",
   },
+  INVALID_ASSIGNMENT_DATE: {
+    code: "INVALID_ASSIGNMENT_DATE",
+    status: StatusCodes.BAD_REQUEST,
+    message: "Tanggal efektif penugasan baru harus lebih baru dari tanggal mulai penugasan aktif saat ini.",
+  },
+  SUPERVISOR_NOT_ACTIVE: {
+    code: "SUPERVISOR_NOT_ACTIVE",
+    status: StatusCodes.BAD_REQUEST,
+    message: "Supervisor yang dipilih tidak aktif atau bukan peran Supervisor.",
+  },
   INVALID_PHOTO_COUNT: {
     code: "INVALID_PHOTO_COUNT",
     status: StatusCodes.BAD_REQUEST,
