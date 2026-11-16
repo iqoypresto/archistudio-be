@@ -61,6 +61,28 @@ export function assertProgressiveUnlock(params: {
   ReportLockService.assertDateUnlocked(lockState.pendingDates, params.targetReportDate);
 }
 
+export function assertAreaDateUnlocked(params: {
+  project: { startDate: Date; endDate: Date | null; timezone: string; routineHolidays: number[] };
+  assignment: { startDate: Date; endDate: Date | null };
+  submittedDates: string[];
+  unlocks: { unlockedThroughDate: Date }[];
+  targetReportDate: string;
+  now: Date;
+}): void {
+  assertProgressiveUnlock({
+    projectStartDate: params.project.startDate,
+    projectEndDate: params.project.endDate,
+    assignmentStartDate: params.assignment.startDate,
+    assignmentEndDate: params.assignment.endDate,
+    timezone: params.project.timezone,
+    routineHolidays: params.project.routineHolidays,
+    submittedDates: params.submittedDates,
+    unlockedThroughDate: params.unlocks[0]?.unlockedThroughDate ?? null,
+    targetReportDate: params.targetReportDate,
+    now: params.now,
+  });
+}
+
 export function extractMutationFields(body: UpdateDraftBody): DraftMutationData {
   return {
     reportType: body.reportType,
@@ -117,4 +139,32 @@ export async function hydrateReportDetail(
   const keys = record.photos.map((p) => p.storageKey);
   const urlMap = keys.length > 0 ? await createSignedViewUrlsMap(keys) : {};
   return mapReportDetail(record, urlMap);
+}
+
+export function assertCanReadReport(
+  record: ReportDetailRecord,
+  user: AuthenticatedUser,
+): void {
+  if (user.role !== Role.SUPERVISOR) return;
+  const allowed =
+    record.supervisorId === user.id ||
+    record.area.assignments.some((a) => a.supervisorId === user.id);
+  if (!allowed) throw new ResponseError("AREA_SCOPE_FORBIDDEN");
+}
+
+export function buildMergedCompletenessInput(
+  existing: ReportDetailRecord,
+  body: UpdateDraftBody,
+) {
+  return {
+    reportType: body.reportType ?? existing.reportType,
+    progressText: body.progressText !== undefined ? body.progressText : existing.progressText,
+    obstaclesText: body.obstaclesText !== undefined ? body.obstaclesText : existing.obstaclesText,
+    tomorrowPlanText:
+      body.tomorrowPlanText !== undefined ? body.tomorrowPlanText : existing.tomorrowPlanText,
+    weather: body.weather !== undefined ? body.weather : existing.weather,
+    workerCount: body.workerCount !== undefined ? body.workerCount : existing.workerCount,
+    noWorkReason: body.noWorkReason !== undefined ? body.noWorkReason : existing.noWorkReason,
+    photosCount: body.photos ? body.photos.length : existing.photos.length,
+  };
 }

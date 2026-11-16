@@ -6,6 +6,29 @@ export type ListReportsQuery = z.infer<typeof ReportValidation.QUERY.list>;
 export type SaveDraftBody = z.infer<typeof ReportValidation.BODY.saveDraft>;
 export type UpdateDraftBody = z.infer<typeof ReportValidation.BODY.updateDraft>;
 export type SubmitReportBody = z.infer<typeof ReportValidation.BODY.submit>;
+export type ReviseReportBody = z.infer<typeof ReportValidation.BODY.revise>;
+
+export interface ReportSnapshotJson {
+  reportType: ReportType;
+  progressText: string | null;
+  obstaclesText: string | null;
+  tomorrowPlanText: string | null;
+  weather: WeatherType | null;
+  workerCount: number | null;
+  noWorkReason: string | null;
+  locationText: string | null;
+  submittedAt: string | null;
+  isLate: boolean;
+  signedByName: string | null;
+  signedByTitle: string | null;
+  photos: Array<{
+    id: string;
+    storageKey: string;
+    caption: string | null;
+    sortOrder: number;
+    takenAt: string | null;
+  }>;
+}
 
 export interface ReportPhotoInput {
   storageKey: string;

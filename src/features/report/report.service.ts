@@ -1,11 +1,13 @@
-import { ReportStatus, Role } from "@prisma/client";
+import { Prisma, ReportStatus, Role } from "@prisma/client";
 import { isPastCutoff, parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import { PaginationHelper } from "../../helpers/pagination.helper.js";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import {
+  assertAreaDateUnlocked,
   assertAssignmentOnDate,
-  assertProgressiveUnlock,
+  assertCanReadReport,
+  buildMergedCompletenessInput,
   buildReportsWhere,
   extractMutationFields,
   hydrateReportDetail,
@@ -14,6 +16,7 @@ import {
   assertSubmitCompleteness,
   assertValidStorageKeys,
   buildReportNumber,
+  buildRevisionSnapshotJson,
   mapReportListItem,
   toIsoDateOnly,
 } from "./report.helper.js";
@@ -21,6 +24,7 @@ import { ReportRepository } from "./report.repository.js";
 import type {
   DailyReportDetail,
   ListReportsQuery,
+  ReviseReportBody,
   SaveDraftBody,
   SubmitReportBody,
   UpdateDraftBody,
@@ -29,35 +33,21 @@ import type {
 export class ReportService {
   /** Mengambil daftar laporan harian berpaginasi sesuai cakupan role (BR-03). */
   static async listReports(query: ListReportsQuery, user: AuthenticatedUser) {
-    const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(
-      query.page,
-      query.pageSize,
-    );
+    const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(query.page, query.pageSize);
     const [rows, totalItems] = await ReportRepository.findReportsPaginated({
       where: buildReportsWhere(query, user),
       skip,
       take,
       orderBy: { [query.sortBy]: query.sortOrder },
     });
-    return {
-      items: rows.map(mapReportListItem),
-      meta: PaginationHelper.buildMeta(page, pageSize, totalItems),
-    };
+    return { items: rows.map(mapReportListItem), meta: PaginationHelper.buildMeta(page, pageSize, totalItems) };
   }
 
   /** Mengambil detail penuh satu laporan beserta signed photo URLs (US-13, BR-03, BR-28). */
-  static async getReportById(
-    reportId: string,
-    user: AuthenticatedUser,
-  ): Promise<DailyReportDetail> {
+  static async getReportById(reportId: string, user: AuthenticatedUser): Promise<DailyReportDetail> {
     const record = await ReportRepository.findReportDetailById(reportId);
     if (!record) throw new ResponseError("RESOURCE_NOT_FOUND");
-    if (user.role === Role.SUPERVISOR) {
-      const allowed =
-        record.supervisorId === user.id ||
-        record.area.assignments.some((a) => a.supervisorId === user.id);
-      if (!allowed) throw new ResponseError("AREA_SCOPE_FORBIDDEN");
-    }
+    assertCanReadReport(record, user);
     return hydrateReportDetail(record);
   }
 
@@ -74,17 +64,13 @@ export class ReportService {
     if (existing?.status === ReportStatus.SUBMITTED) {
       throw new ResponseError("REPORT_ALREADY_EXISTS");
     }
-    assertProgressiveUnlock({
-      projectStartDate: area.project.startDate,
-      projectEndDate: area.project.endDate,
-      assignmentStartDate: assignment.startDate,
-      assignmentEndDate: assignment.endDate,
-      timezone: area.project.timezone,
-      routineHolidays: area.project.routineHolidays,
+    assertAreaDateUnlocked({
+      project: area.project,
+      assignment,
       submittedDates: area.reports
         .filter((r) => r.status === ReportStatus.SUBMITTED)
         .map((r) => toIsoDateOnly(r.reportDate)),
-      unlockedThroughDate: area.unlocks[0]?.unlockedThroughDate ?? null,
+      unlocks: area.unlocks,
       targetReportDate: body.reportDate,
       now,
     });
@@ -148,32 +134,18 @@ export class ReportService {
     }
     const reportDateStr = toIsoDateOnly(existing.reportDate);
     const assignment = assertAssignmentOnDate(existing.area.assignments, user.id, reportDateStr);
-    assertProgressiveUnlock({
-      projectStartDate: existing.area.project.startDate,
-      projectEndDate: existing.area.project.endDate,
-      assignmentStartDate: assignment.startDate,
-      assignmentEndDate: assignment.endDate,
-      timezone: existing.area.project.timezone,
-      routineHolidays: existing.area.project.routineHolidays,
+    assertAreaDateUnlocked({
+      project: existing.area.project,
+      assignment,
       submittedDates: existing.area.reports.map((r) => toIsoDateOnly(r.reportDate)),
-      unlockedThroughDate: existing.area.unlocks[0]?.unlockedThroughDate ?? null,
+      unlocks: existing.area.unlocks,
       targetReportDate: reportDateStr,
       now,
     });
     if (body.photos) {
       assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
     }
-    assertSubmitCompleteness({
-      reportType: body.reportType ?? existing.reportType,
-      progressText: body.progressText !== undefined ? body.progressText : existing.progressText,
-      obstaclesText: body.obstaclesText !== undefined ? body.obstaclesText : existing.obstaclesText,
-      tomorrowPlanText:
-        body.tomorrowPlanText !== undefined ? body.tomorrowPlanText : existing.tomorrowPlanText,
-      weather: body.weather !== undefined ? body.weather : existing.weather,
-      workerCount: body.workerCount !== undefined ? body.workerCount : existing.workerCount,
-      noWorkReason: body.noWorkReason !== undefined ? body.noWorkReason : existing.noWorkReason,
-      photosCount: body.photos ? body.photos.length : existing.photos.length,
-    });
+    assertSubmitCompleteness(buildMergedCompletenessInput(existing, body));
     const submitted = await ReportRepository.submitReportTransaction({
       reportId,
       uploadedById: user.id,
@@ -185,5 +157,39 @@ export class ReportService {
       signedByTitle: user.jobTitle,
     });
     return hydrateReportDetail(submitted);
+  }
+
+  /** Merevisi laporan terkirim (khusus OWNER) dan menyimpan snapshot JSON versi lama (ADR-05, BR-24). */
+  static async reviseReport(
+    reportId: string,
+    body: ReviseReportBody,
+    user: AuthenticatedUser,
+    now = new Date(),
+  ): Promise<DailyReportDetail> {
+    if (user.role !== Role.OWNER) throw new ResponseError("REPORT_LOCKED_AFTER_SUBMIT");
+    const existing = await ReportRepository.findReportDetailById(reportId);
+    if (!existing) throw new ResponseError("RESOURCE_NOT_FOUND");
+    if (existing.status !== ReportStatus.SUBMITTED) {
+      throw new ResponseError(
+        "VALIDATION_ERROR",
+        "Hanya laporan berstatus TERKIRIM yang dapat direvisi oleh Owner.",
+      );
+    }
+    if (body.photos) {
+      assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
+    }
+    assertSubmitCompleteness(buildMergedCompletenessInput(existing, body));
+    const snapshot = buildRevisionSnapshotJson(existing) as unknown as Prisma.InputJsonValue;
+    const revised = await ReportRepository.reviseReportTransaction({
+      reportId,
+      revisedById: user.id,
+      revisionNo: existing.revisionNo + 1,
+      changeSummary: body.changeSummary,
+      previousSnapshotJson: snapshot,
+      data: extractMutationFields(body),
+      photos: body.photos,
+      revisedAt: now,
+    });
+    return hydrateReportDetail(revised);
   }
 }

@@ -141,4 +141,40 @@ export class ReportRepository {
       });
     });
   }
+
+  /** Mencatat snapshot revisi dan memperbarui laporan terkirim oleh Owner secara atomik (ADR-05, BR-24). */
+  static async reviseReportTransaction(input: {
+    reportId: string;
+    revisedById: string;
+    revisionNo: number;
+    changeSummary: string;
+    previousSnapshotJson: Prisma.InputJsonValue;
+    data: DraftMutationData;
+    photos?: ReportPhotoInput[];
+    revisedAt: Date;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      await tx.reportRevision.create({
+        data: {
+          reportId: input.reportId,
+          revisionNo: input.revisionNo,
+          revisedById: input.revisedById,
+          changeSummary: input.changeSummary,
+          previousSnapshotJson: input.previousSnapshotJson,
+        },
+      });
+      await replacePhotosInTx(tx, input.reportId, input.photos, input.revisedById);
+      return tx.dailyReport.update({
+        where: { id: input.reportId },
+        data: {
+          ...input.data,
+          isRevised: true,
+          revisionNo: input.revisionNo,
+          revisedAt: input.revisedAt,
+          revisedById: input.revisedById,
+        },
+        include: REPORT_DETAIL_INCLUDE,
+      });
+    });
+  }
 }

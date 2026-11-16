@@ -58,5 +58,12 @@ export class ReportValidation {
     }),
     updateDraft: draftContentSchema,
     submit: draftContentSchema,
+    revise: draftContentSchema.extend({
+      changeSummary: z
+        .string()
+        .trim()
+        .min(3, "Ringkasan perubahan revisi minimal 3 karakter.")
+        .max(500, "Ringkasan perubahan revisi maksimal 500 karakter."),
+    }),
   };
 }
