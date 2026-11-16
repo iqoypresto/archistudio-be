@@ -12,3 +12,33 @@ reportRouter.get(
   AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
   ReportController.getMyAreasStatus,
 );
+
+reportRouter.get(
+  "/",
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
+  ReportController.listReports,
+);
+
+reportRouter.get(
+  "/:id",
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
+  ReportController.getReportById,
+);
+
+reportRouter.post(
+  "/draft",
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
+  ReportController.saveDraft,
+);
+
+reportRouter.put(
+  "/:id/draft",
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
+  ReportController.updateDraft,
+);
+
+reportRouter.post(
+  "/:id/submit",
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
+  ReportController.submitReport,
+);
