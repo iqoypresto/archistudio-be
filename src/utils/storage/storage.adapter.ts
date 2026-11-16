@@ -65,6 +65,20 @@ export async function createSignedViewUrl(
   return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
 }
 
+/** Mengambil buffer biner objek langsung dari S3/R2 (khusus kompilasi PDF). */
+export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
+  const command = new GetObjectCommand({
+    Bucket: env.STORAGE_BUCKET,
+    Key: storageKey,
+  });
+  const response = await s3Client.send(command);
+  if (!response.Body) {
+    throw new Error(`Objek ${storageKey} tidak memiliki konten Body.`);
+  }
+  const bytes = await response.Body.transformToByteArray();
+  return Buffer.from(bytes);
+}
+
 /** Mengubah daftar storageKey menjadi peta { [storageKey]: signedViewUrl }. */
 export async function createSignedViewUrlsMap(
   storageKeys: string[],
@@ -79,3 +93,11 @@ export async function createSignedViewUrlsMap(
   );
   return Object.fromEntries(pairs);
 }
+
+export const StorageAdapter = {
+  buildReportPhotoStorageKey,
+  createSignedUploadUrl,
+  createSignedViewUrl,
+  createSignedViewUrlsMap,
+  getObjectBuffer,
+};

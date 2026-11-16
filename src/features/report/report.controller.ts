@@ -5,6 +5,11 @@ import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { validate } from "../../validations/validate.js";
 import { ReportLockService } from "./report-lock.service.js";
 import { ReportService } from "./report.service.js";
+import { ReportUnlockService } from "./report-unlock.service.js";
+import {
+  unlockAreaBodySchema,
+  unlockAreaParamsSchema,
+} from "./report-unlock.validation.js";
 import { ReportValidation } from "./report.validation.js";
 
 export class ReportController {
@@ -64,5 +69,14 @@ export class ReportController {
     const body = validate(ReportValidation.BODY.revise, req.body);
     const result = await ReportService.reviseReport(id, body, req.user);
     ResponseHelper.ok(res, "Laporan harian berhasil direvisi oleh Owner.", result);
+  }
+
+  /** Membuka kunci manual untuk area yang tertunggak > 3 hari kerja (US-11, BR-22). */
+  static async unlockArea(req: Request, res: Response): Promise<void> {
+    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
+    const { areaId } = validate(unlockAreaParamsSchema, req.params);
+    const body = validate(unlockAreaBodySchema, req.body);
+    const result = await ReportUnlockService.unlockArea(areaId, req.user.id, body);
+    ResponseHelper.created(res, "Kunci laporan area berhasil dibuka secara manual.", result);
   }
 }
