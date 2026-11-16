@@ -48,3 +48,9 @@ reportRouter.patch(
   AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
   ReportController.reviseReport,
 );
+
+reportRouter.post(
+  "/areas/:areaId/unlock",
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN),
+  ReportController.unlockArea,
+);
