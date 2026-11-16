@@ -56,4 +56,13 @@ export class ReportController {
     const result = await ReportService.submitReport(id, body, req.user);
     ResponseHelper.ok(res, "Laporan harian berhasil dikirim.", result);
   }
+
+  /** Merevisi isi laporan terkirim khusus OWNER + mencatat riwayat snapshot (US-14, BR-24). */
+  static async reviseReport(req: Request, res: Response): Promise<void> {
+    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
+    const { id } = validate(ReportValidation.PARAMS.id, req.params);
+    const body = validate(ReportValidation.BODY.revise, req.body);
+    const result = await ReportService.reviseReport(id, body, req.user);
+    ResponseHelper.ok(res, "Laporan harian berhasil direvisi oleh Owner.", result);
+  }
 }

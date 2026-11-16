@@ -5,6 +5,7 @@ import type {
   DailyReportDetail,
   DailyReportListItem,
   ReportPhotoInput,
+  ReportSnapshotJson,
 } from "./report.type.js";
 
 export function toIsoDateOnly(date: Date): string {
@@ -128,6 +129,33 @@ export function mapReportDetail(
       previousSnapshotJson: rev.previousSnapshotJson,
       revisedByName: rev.revisedBy.name,
       createdAt: rev.createdAt.toISOString(),
+    })),
+  };
+}
+
+/** Membentuk snapshot JSON utuh versi laporan sebelum direvisi Owner (ADR-05, BR-24). */
+export function buildRevisionSnapshotJson(
+  record: ReportDetailRecord,
+): ReportSnapshotJson {
+  return {
+    reportType: record.reportType,
+    progressText: record.progressText,
+    obstaclesText: record.obstaclesText,
+    tomorrowPlanText: record.tomorrowPlanText,
+    weather: record.weather,
+    workerCount: record.workerCount,
+    noWorkReason: record.noWorkReason,
+    locationText: record.locationText,
+    submittedAt: record.submittedAt ? record.submittedAt.toISOString() : null,
+    isLate: record.isLate,
+    signedByName: record.signedByName,
+    signedByTitle: record.signedByTitle,
+    photos: record.photos.map((photo) => ({
+      id: photo.id,
+      storageKey: photo.storageKey,
+      caption: photo.caption,
+      sortOrder: photo.sortOrder,
+      takenAt: photo.takenAt ? photo.takenAt.toISOString() : null,
     })),
   };
 }
