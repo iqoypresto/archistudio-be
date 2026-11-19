@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../configs/env.config.js";
 import { ResponseError } from "../errors/response-error.util.js";
@@ -111,6 +111,21 @@ export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
   return Buffer.from(bytes);
 }
 
+/** Memeriksa keberadaan objek foto dan mengambil timestamp unggah dari storage. */
+export async function getObjectLastModified(storageKey: string): Promise<{ exists: boolean; lastModified: Date | null }> {
+  try {
+    const response = await s3Client.send(new HeadObjectCommand({
+      Bucket: env.STORAGE_BUCKET,
+      Key: storageKey,
+    }));
+    return { exists: true, lastModified: response.LastModified ?? null };
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404) return { exists: false, lastModified: null };
+    throw error;
+  }
+}
+
 /** Mengubah daftar storageKey menjadi peta { [storageKey]: signedViewUrl }. */
 export async function createSignedViewUrlsMap(
   storageKeys: string[],
@@ -132,5 +147,6 @@ export const StorageAdapter = {
   createSignedUploadUrl,
   createSignedViewUrl,
   createSignedViewUrlsMap,
+  getObjectLastModified,
   getObjectBuffer,
 };

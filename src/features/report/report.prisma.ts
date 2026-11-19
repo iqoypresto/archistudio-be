@@ -80,6 +80,7 @@ export function buildPhotoCreateRows(photos: ReportPhotoInput[], uploadedById: s
     caption: photo.caption ?? null,
     sortOrder: photo.sortOrder,
     takenAt: photo.takenAt ? new Date(photo.takenAt) : null,
+    uploadedAt: photo.uploadedAt ? new Date(photo.uploadedAt) : null,
     uploadedById,
   }));
 }
