@@ -64,7 +64,9 @@ describe("BR-25 — kondisi atomik dan pembaca data historis", () => {
     expect(vi.mocked(prisma.dailyReport.findMany).mock.calls[0]?.[0]?.where).not.toHaveProperty("archivedAt");
     await fetchProjectAndAreas("project-a", new Date("2026-11-16"));
     expect(vi.mocked(prisma.project.findFirst).mock.calls[0]?.[0]).toMatchObject({
-      include: { areas: { include: { reports: { where: { reportDate: new Date("2026-11-16"), status: "SUBMITTED" } } } } },
+      select: { areas: { select: { assignments: expect.any(Object), reports: {
+        where: { reportDate: new Date("2026-11-16"), status: "SUBMITTED" },
+      } } } },
     });
     const pdfQuery = JSON.stringify(vi.mocked(prisma.project.findFirst).mock.calls[0]?.[0]);
     expect(pdfQuery).not.toContain("archivedAt");
