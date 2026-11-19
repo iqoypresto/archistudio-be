@@ -3,15 +3,9 @@ import { prisma } from "../../configs/prisma-client.config.js";
 import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
+import { loadPdfMake } from "../../utils/pdf/pdfmake.loader.js";
 import { buildTemplateADefinition } from "./pdf-export.template-a.js";
 import type { PdfAreaReportData, PdfDocumentData, PdfPhotoItem } from "./pdf-export.type.js";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfmake = require("pdfmake");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-pdfmake.fonts = require("pdfmake/fonts/Roboto.js");
-pdfmake.setUrlAccessPolicy(() => false);
-pdfmake.setLocalAccessPolicy(() => true);
 
 type AreaWithReports = Awaited<ReturnType<typeof fetchProjectAndAreas>>["areas"][number];
 
@@ -112,6 +106,7 @@ export class PdfExportService {
     };
 
     const docDef = buildTemplateADefinition(docData);
+    const pdfmake = await loadPdfMake();
     const pdfDoc = pdfmake.createPdf(docDef);
     const buffer = await pdfDoc.getBuffer();
     const cleanDate = dateStr.replace(/-/g, "");

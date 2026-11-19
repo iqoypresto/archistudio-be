@@ -32,6 +32,32 @@ enum ReportStatus {
   SUBMITTED
 }
 
+enum PayeeType {
+  FREELANCE
+  AGENT
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+}
+
+enum DrawingDirection {
+  IN
+  OUT
+}
+
+enum ProjectDocumentType {
+  QUOTATION
+  BAST
+  INVOICE
+}
+
+enum CommsDirection {
+  INBOUND
+  OUTBOUND
+}
+
 model User {
   id           String    @id @default(uuid())
   name         String
@@ -52,6 +78,7 @@ model User {
   uploadedPhotos    ReportPhoto[]
   reportRevisions   ReportRevision[]
   reportUnlocks     ReportUnlock[]
+  paymentRecords    PaymentRecord[]
   @@index([role, isActive])
   @@map("users")
 }
@@ -77,10 +104,15 @@ model Project {
   status          ProjectStatus @default(PERSIAPAN)
   timezone        String        @default("Asia/Jakarta")     /// Lihat BR-18 & NFR-04
   routineHolidays Int[]         @default([0]) @map("routine_holidays") /// 0=Minggu..6=Sabtu, Lihat BR-11
+  completedAt     DateTime?     @map("completed_at") /// Diisi Owner saat status SELESAI, tahun arsip BR-39
+  archivedAt      DateTime?     @map("archived_at") /// Waktu arsip manual, tahun arsip BR-39
   deletedAt       DateTime?     @map("deleted_at")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   areas           Area[]
+  drawings        Drawing[]
+  documents       ProjectDocument[]
+  commsEntries    CommsEntry[]
   @@index([status, deletedAt])
   @@map("projects")
 }
@@ -143,7 +175,7 @@ model DailyReport {
   revisionNo       Int              @default(0) @map("revision_no")
   revisedAt        DateTime?        @map("revised_at")
   revisedById      String?          @map("revised_by_id")
-  archivedAt       DateTime?        @map("archived_at")        /// [PENDING BR-25]
+  archivedAt       DateTime?        @map("archived_at")        /// Lihat BR-25
   createdAt        DateTime         @default(now()) @map("created_at")
   updatedAt        DateTime         @updatedAt @map("updated_at")
   area             Area             @relation(fields: [areaId], references: [id])
@@ -164,6 +196,7 @@ model ReportPhoto {
   caption      String?
   sortOrder    Int         @map("sort_order")
   takenAt      DateTime?   @map("taken_at")
+  uploadedAt   DateTime?   @map("uploaded_at") /// LastModified R2; null untuk foto lama tanpa metadata BR-23
   uploadedById String      @map("uploaded_by_id")
   createdAt    DateTime    @default(now()) @map("created_at")
   report       DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
@@ -195,4 +228,94 @@ model ReportUnlock {
   unlockedBy          User     @relation(fields: [unlockedById], references: [id])
   @@index([areaId, createdAt])
   @@map("report_unlocks")
+}
+
+model ExternalPayee {
+  id        String    @id @default(uuid())
+  type      PayeeType
+  name      String
+  phone     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  payments PaymentRecord[]
+
+  @@index([type, name])
+  @@map("external_payees")
+}
+
+model PaymentRecord {
+  id              String        @id @default(uuid())
+  payeeId         String        @map("payee_id")
+  status          PaymentStatus @default(UNPAID)
+  amount          Decimal       @db.Decimal(14, 2)
+  recordDate      DateTime      @map("record_date") @db.Date
+  dueDate         DateTime?     @map("due_date") @db.Date
+  proofStorageKey String?       @map("proof_storage_key")
+  proofFileName   String?       @map("proof_file_name")
+  proofMimeType   String?       @map("proof_mime_type")
+  proofSizeBytes  Int?          @map("proof_size_bytes")
+  createdById     String        @map("created_by_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  payee     ExternalPayee @relation(fields: [payeeId], references: [id])
+  createdBy User          @relation(fields: [createdById], references: [id])
+
+  @@index([payeeId, recordDate])
+  @@index([status, dueDate])
+  @@map("payment_records")
+}
+
+model Drawing {
+  id         String           @id @default(uuid())
+  projectId  String           @map("project_id")
+  direction  DrawingDirection
+  storageKey String           @map("storage_key")
+  fileName   String           @map("file_name")
+  mimeType   String           @map("mime_type")
+  sizeBytes  Int              @map("size_bytes")
+  uploadedAt DateTime         @default(now()) @map("uploaded_at")
+  archivedAt DateTime?        @map("archived_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, direction, archivedAt, uploadedAt])
+  @@map("drawings")
+}
+
+model ProjectDocument {
+  id         String             @id @default(uuid())
+  projectId  String             @map("project_id")
+  type       ProjectDocumentType
+  storageKey String             @map("storage_key")
+  fileName   String             @map("file_name")
+  mimeType   String             @map("mime_type")
+  sizeBytes  Int                @map("size_bytes")
+  uploadedAt DateTime           @default(now()) @map("uploaded_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, type, uploadedAt])
+  @@map("project_documents")
+}
+
+model CommsEntry {
+  id              String        @id @default(uuid())
+  projectId       String        @map("project_id")
+  direction       CommsDirection
+  entryDate       DateTime      @map("entry_date") @db.Date
+  subject         String
+  note            String?
+  attachmentKey   String?       @map("attachment_key")
+  attachmentName  String?       @map("attachment_name")
+  attachmentMime  String?       @map("attachment_mime")
+  attachmentBytes Int?          @map("attachment_bytes")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, entryDate])
+  @@map("comms_entries")
 }
