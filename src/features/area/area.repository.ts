@@ -1,49 +1,20 @@
 import { prisma } from "../../configs/prisma-client.config.js";
+import {
+  areaSelect,
+  areaWithProjectSelect,
+  assignmentSelect,
+  formatArea,
+  supervisorSelect,
+  type RawAreaItem,
+} from "./area.helper.js";
 import type {
   ActiveAssignmentItem,
   AreaListItem,
   AssignmentHistoryItem,
 } from "./area.type.js";
 
-const supervisorSelect = {
-  id: true,
-  name: true,
-  username: true,
-  phone: true,
-  jobTitle: true,
-} as const;
-
-const assignmentSelect = {
-  id: true,
-  supervisorId: true,
-  startDate: true,
-  endDate: true,
-  supervisor: { select: supervisorSelect },
-} as const;
-
-const areaSelect = {
-  id: true,
-  projectId: true,
-  code: true,
-  name: true,
-  createdAt: true,
-  updatedAt: true,
-  assignments: {
-    where: { endDate: null },
-    take: 1,
-    select: assignmentSelect,
-  },
-} as const;
-
-type RawAreaItem = AreaListItem & { assignments: ActiveAssignmentItem[] };
-
-function formatArea(raw: RawAreaItem): AreaListItem {
-  const { assignments, ...rest } = raw;
-  return { ...rest, activeAssignment: assignments[0] ?? null };
-}
-
 export class AreaRepository {
-  /** Mengambil daftar area dalam project beserta penugasan aktif (BR-03, US-05). */
+  /** Mengambil daftar area dalam project beserta penugasan aktif (BR-03, BR-09, US-05, US-24). */
   static async findManyByProjectId(
     projectId: string,
     supervisorUserId?: string,
@@ -53,7 +24,12 @@ export class AreaRepository {
         projectId,
         deletedAt: null,
         ...(supervisorUserId && {
-          assignments: { some: { supervisorId: supervisorUserId } },
+          assignments: {
+            some: {
+              supervisorId: supervisorUserId,
+              endDate: null,
+            },
+          },
         }),
       },
       select: areaSelect,
@@ -62,11 +38,11 @@ export class AreaRepository {
     return (areas as RawAreaItem[]).map(formatArea);
   }
 
-  /** Mengambil satu area berdasarkan ID beserta penugasan aktifnya. */
+  /** Mengambil satu area berdasarkan ID beserta penugasan aktif & status project induk. */
   static async findById(areaId: string): Promise<AreaListItem | null> {
     const area = await prisma.area.findFirst({
       where: { id: areaId, deletedAt: null },
-      select: areaSelect,
+      select: areaWithProjectSelect,
     });
     return area ? formatArea(area as RawAreaItem) : null;
   }
@@ -88,7 +64,7 @@ export class AreaRepository {
     return count > 0;
   }
 
-  /** Transaksi atomik: Membuat Area baru beserta penugasan aktif awal (US-05, BR-08, BR-13). */
+  /** Transaksi atomik: Membuat Area baru beserta penugasan aktif awal (US-05, BR-08, BR-09, BR-13). */
   static async createWithInitialAssignment(data: {
     projectId: string;
     code: string;
@@ -138,7 +114,7 @@ export class AreaRepository {
     return formatArea(updated as RawAreaItem);
   }
 
-  /** Transaksi atomik: Mengganti supervisor aktif (tutup penugasan lama H-1 & buat baru) (US-06, BR-08, BR-10). */
+  /** Transaksi atomik: Menugaskan/mengganti supervisor aktif tanpa mengubah laporan lama (BR-08..BR-10). */
   static async replaceSupervisorAssignment(data: {
     areaId: string;
     activeAssignmentId?: string;
