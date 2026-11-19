@@ -1,9 +1,15 @@
+import type { ProjectStatus } from "@prisma/client";
 import type { z } from "zod";
 import type { AreaValidation } from "./area.validation.js";
 
 export type CreateAreaDTO = z.infer<typeof AreaValidation.BODY.create>;
 export type UpdateAreaDTO = z.infer<typeof AreaValidation.BODY.update>;
 export type AssignSupervisorDTO = z.infer<typeof AreaValidation.BODY.assignSupervisor>;
+
+export interface ProjectLifecycleState {
+  status: ProjectStatus;
+  archivedAt?: Date | null;
+}
 
 export interface SupervisorSummary {
   id: string;
@@ -29,6 +35,7 @@ export interface AreaListItem {
   createdAt: Date;
   updatedAt: Date;
   activeAssignment?: ActiveAssignmentItem | null;
+  project?: ProjectLifecycleState;
 }
 
 export interface AssignmentHistoryItem {
