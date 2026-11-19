@@ -1,6 +1,31 @@
 import { prisma } from "../../configs/prisma-client.config.js";
 
 export class UploadRepository {
+  /** Memastikan tujuan upload global pembayaran masih tersedia. */
+  static async payeeExists(payeeId: string): Promise<boolean> {
+    const payee = await prisma.externalPayee.findUnique({
+      where: { id: payeeId },
+      select: { id: true },
+    });
+    return Boolean(payee);
+  }
+
+  /** Mengambil project yang masih dapat menerima berkas baru. */
+  static async projectAcceptsFiles(projectId: string): Promise<boolean> {
+    return Boolean(
+      await prisma.project.findFirst({
+        where: {
+          id: projectId,
+          deletedAt: null,
+          archivedAt: null,
+          completedAt: null,
+          status: { not: "SELESAI" },
+        },
+        select: { id: true },
+      }),
+    );
+  }
+
   /** Mengambil data area beserta project dan daftar penugasan supervisor (BR-03, BR-10). */
   static async findAreaWithAssignments(areaId: string) {
     return prisma.area.findFirst({

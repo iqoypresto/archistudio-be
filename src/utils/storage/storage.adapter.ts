@@ -8,7 +8,13 @@ const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
+  "application/pdf": "pdf",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
 };
+const REPORT_PHOTO_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const s3Client = new S3Client({
   region: env.STORAGE_REGION,
@@ -29,12 +35,38 @@ export interface BuildPhotoKeyParams {
 
 /** Membangun storageKey terstruktur per project, area, dan tanggal bisnis. */
 export function buildReportPhotoStorageKey(params: BuildPhotoKeyParams): string {
+  if (!REPORT_PHOTO_CONTENT_TYPES.has(params.contentType)) {
+    throw new ResponseError("UNSUPPORTED_FILE_TYPE");
+  }
   const ext = CONTENT_TYPE_EXTENSIONS[params.contentType];
   if (!ext) {
     throw new ResponseError("UNSUPPORTED_FILE_TYPE");
   }
   const fileId = crypto.randomUUID();
   return `projects/${params.projectId}/areas/${params.areaId}/${params.reportDate}/${fileId}.${ext}`;
+}
+
+export type PurposeUpload = "payment-proof" | "drawing" | "project-document" | "comms-attachment";
+
+/** Membuat key berkas non-laporan dari purpose yang sudah divalidasi backend. */
+export function buildPurposeStorageKey(params: {
+  purpose: PurposeUpload;
+  referenceId: string;
+  category?: string;
+  contentType: string;
+}): string {
+  const ext = CONTENT_TYPE_EXTENSIONS[params.contentType];
+  if (!ext) throw new ResponseError("UNSUPPORTED_FILE_TYPE");
+  const fileId = crypto.randomUUID();
+  const folder = resolvePurposeFolder(params.purpose, params.referenceId, params.category);
+  return `${folder}/${fileId}.${ext}`;
+}
+
+function resolvePurposeFolder(purpose: PurposeUpload, referenceId: string, category?: string): string {
+  if (purpose === "payment-proof") return `payments/${referenceId}/proofs`;
+  if (purpose === "drawing") return `projects/${referenceId}/drawings/${category}`;
+  if (purpose === "project-document") return `projects/${referenceId}/documents/${category}`;
+  return `projects/${referenceId}/comms-attachments`;
 }
 
 /** Menghasilkan presigned PUT URL agar browser HP mengunggah langsung ke R2/S3. */
@@ -96,6 +128,7 @@ export async function createSignedViewUrlsMap(
 
 export const StorageAdapter = {
   buildReportPhotoStorageKey,
+  buildPurposeStorageKey,
   createSignedUploadUrl,
   createSignedViewUrl,
   createSignedViewUrlsMap,

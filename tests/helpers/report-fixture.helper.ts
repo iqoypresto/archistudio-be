@@ -34,6 +34,7 @@ export function makeReportRecord(overrides?: {
     caption: "Foto bukti",
     sortOrder: i,
     takenAt: null,
+    uploadedAt: null,
     uploadedById: "sup-1",
     createdAt: new Date(),
   }));

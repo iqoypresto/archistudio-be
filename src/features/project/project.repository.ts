@@ -43,7 +43,10 @@ export class ProjectRepository {
           some: {
             deletedAt: null,
             assignments: {
-              some: { supervisorId: params.supervisorUserId },
+              some: {
+                supervisorId: params.supervisorUserId,
+                endDate: null,
+              },
             },
           },
         },
@@ -85,7 +88,10 @@ export class ProjectRepository {
             some: {
               deletedAt: null,
               assignments: {
-                some: { supervisorId: supervisorUserId },
+                some: {
+                  supervisorId: supervisorUserId,
+                  endDate: null,
+                },
               },
             },
           },
@@ -98,7 +104,10 @@ export class ProjectRepository {
             deletedAt: null,
             ...(supervisorUserId && {
               assignments: {
-                some: { supervisorId: supervisorUserId },
+                some: {
+                  supervisorId: supervisorUserId,
+                  endDate: null,
+                },
               },
             }),
           },

@@ -62,6 +62,11 @@ export const AppErrors = {
     status: StatusCodes.CONFLICT,
     message: "Terjadi konflik data.",
   },
+  DAILY_REPORTS_INCOMPLETE: {
+    code: "DAILY_REPORTS_INCOMPLETE",
+    status: StatusCodes.CONFLICT,
+    message: "PDF belum dapat dibuat karena masih ada area wajib lapor yang belum mengirim laporan.",
+  },
   AREA_ALREADY_HAS_ACTIVE_SUPERVISOR: {
     code: "AREA_ALREADY_HAS_ACTIVE_SUPERVISOR",
     status: StatusCodes.CONFLICT,
@@ -105,7 +110,17 @@ export const AppErrors = {
   UNSUPPORTED_FILE_TYPE: {
     code: "UNSUPPORTED_FILE_TYPE",
     status: StatusCodes.BAD_REQUEST,
-    message: "Format gambar tidak didukung. Gunakan JPG, PNG, atau WebP.",
+    message: "Format file tidak didukung untuk fitur ini.",
+  },
+  FILE_TOO_LARGE: {
+    code: "FILE_TOO_LARGE",
+    status: StatusCodes.REQUEST_TOO_LONG,
+    message: "Ukuran file melebihi batas untuk fitur ini.",
+  },
+  DATE_RANGE_TOO_LONG: {
+    code: "DATE_RANGE_TOO_LONG",
+    status: StatusCodes.BAD_REQUEST,
+    message: "Rentang tanggal maksimal 7 hari kalender.",
   },
   INVALID_STORAGE_KEY: {
     code: "INVALID_STORAGE_KEY",
@@ -120,7 +135,7 @@ export const AppErrors = {
   PROJECT_ALREADY_COMPLETED: {
     code: "PROJECT_ALREADY_COMPLETED",
     status: StatusCodes.UNPROCESSABLE_ENTITY,
-    message: "[PENDING BR-12] Project sudah berstatus selesai dan tidak menerima laporan baru.",
+    message: "Project sudah berstatus selesai dan tidak menerima laporan baru.",
   },
   PREVIOUS_DATE_REPORT_LOCKED: {
     code: "PREVIOUS_DATE_REPORT_LOCKED",
