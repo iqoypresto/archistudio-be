@@ -8,6 +8,12 @@ export const reportRouter = Router();
 reportRouter.use(AuthMiddleware.authenticate);
 
 reportRouter.get(
+  "/archive",
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN),
+  ReportController.listArchive,
+);
+
+reportRouter.get(
   "/my-areas-status",
   AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
   ReportController.getMyAreasStatus,

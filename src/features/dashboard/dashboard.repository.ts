@@ -92,7 +92,6 @@ export class DashboardRepository {
     return prisma.dailyReport.findMany({
       where: {
         status: ReportStatus.SUBMITTED,
-        archivedAt: null,
         ...(params.projectId ? { area: { projectId: params.projectId } } : {}),
         ...(params.dateFrom || params.dateTo
           ? {

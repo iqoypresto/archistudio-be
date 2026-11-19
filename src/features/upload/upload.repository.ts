@@ -55,7 +55,6 @@ export class UploadRepository {
     return prisma.dailyReport.findFirst({
       where: {
         id: reportId,
-        archivedAt: null,
         area: { deletedAt: null, project: { deletedAt: null } },
       },
       select: {

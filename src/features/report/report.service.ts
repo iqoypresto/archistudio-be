@@ -1,14 +1,13 @@
 import { Prisma, ReportStatus, Role } from "@prisma/client";
 import { isPastCutoff, parseDateOnlyUtc } from "../../helpers/date.helper.js";
-import { PaginationHelper } from "../../helpers/pagination.helper.js";
+import { ReportReadService } from "./report-read.service.js";
+import { archiveTimestamp } from "./report-archive.helper.js";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import {
   assertAreaDateUnlocked,
   assertAssignmentOnDate,
-  assertCanReadReport,
   buildMergedCompletenessInput,
-  buildReportsWhere,
   extractMutationFields,
   hydrateReportDetail,
 } from "./report.guard.js";
@@ -17,7 +16,6 @@ import {
   assertValidStorageKeys,
   buildReportNumber,
   buildRevisionSnapshotJson,
-  mapReportListItem,
   toIsoDateOnly,
 } from "./report.helper.js";
 import { ReportRepository } from "./report.repository.js";
@@ -34,22 +32,12 @@ import type {
 export class ReportService {
   /** Mengambil daftar laporan harian berpaginasi sesuai cakupan role (BR-03). */
   static async listReports(query: ListReportsQuery, user: AuthenticatedUser) {
-    const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(query.page, query.pageSize);
-    const [rows, totalItems] = await ReportRepository.findReportsPaginated({
-      where: buildReportsWhere(query, user),
-      skip,
-      take,
-      orderBy: { [query.sortBy]: query.sortOrder },
-    });
-    return { items: rows.map(mapReportListItem), meta: PaginationHelper.buildMeta(page, pageSize, totalItems) };
+    return ReportReadService.list(query, user);
   }
 
-  /** Mengambil detail penuh satu laporan beserta signed photo URLs (US-13, BR-03, BR-28). */
+  /** Detail historis tetap tersedia sesuai scope pengguna (BR-03, BR-25). */
   static async getReportById(reportId: string, user: AuthenticatedUser): Promise<DailyReportDetail> {
-    const record = await ReportRepository.findReportDetailById(reportId);
-    if (!record) throw new ResponseError("RESOURCE_NOT_FOUND");
-    assertCanReadReport(record, user);
-    return hydrateReportDetail(record);
+    return ReportReadService.detail(reportId, user);
   }
 
   /** Menyimpan atau memperbarui draf laporan harian (US-08, US-09, BR-17, BR-20). */
@@ -155,6 +143,7 @@ export class ReportService {
       data: extractMutationFields(body),
       photos,
       submittedAt: now,
+      archivedAt: archiveTimestamp(existing.reportDate, existing.area.project.timezone, now),
       isLate: isPastCutoff(now, reportDateStr, existing.area.project.timezone, 17),
       signedByName: user.name,
       signedByTitle: user.jobTitle,

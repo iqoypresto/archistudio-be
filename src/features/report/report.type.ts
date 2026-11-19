@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type { ReportValidation } from "./report.validation.js";
 
 export type ListReportsQuery = z.infer<typeof ReportValidation.QUERY.list>;
+export type ListArchivedReportsQuery = z.infer<typeof ReportValidation.QUERY.archive>;
 export type SaveDraftBody = z.infer<typeof ReportValidation.BODY.saveDraft>;
 export type UpdateDraftBody = z.infer<typeof ReportValidation.BODY.updateDraft>;
 export type SubmitReportBody = z.infer<typeof ReportValidation.BODY.submit>;
@@ -59,6 +60,7 @@ export interface DailyReportRevisionDto {
 }
 
 export interface DailyReportListItem {
+  archivedAt: string | null;
   id: string;
   reportNumber: string;
   reportDate: string;

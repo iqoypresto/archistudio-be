@@ -31,6 +31,15 @@ export class ReportValidation {
   };
 
   static readonly QUERY = {
+    archive: paginationQuerySchema.extend({
+      projectId: z.string().uuid().optional(),
+      areaId: z.string().uuid().optional(),
+      dateFrom: z.iso.date().optional(),
+      dateTo: z.iso.date().optional(),
+      sortBy: z.enum(["reportDate", "createdAt", "submittedAt"]).default("reportDate"),
+    }).refine((query) => !query.dateFrom || !query.dateTo || query.dateFrom <= query.dateTo, {
+      message: "Tanggal akhir harus sama atau setelah tanggal awal.", path: ["dateTo"],
+    }),
     list: paginationQuerySchema.extend({
       projectId: z.string().uuid().optional(),
       areaId: z.string().uuid().optional(),

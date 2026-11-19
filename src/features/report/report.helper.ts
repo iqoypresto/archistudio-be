@@ -82,6 +82,7 @@ export function mapReportListItem(record: ReportListRecord): DailyReportListItem
     lateLabel: record.isLate ? "Diunggah terlambat" : null,
     isRevised: record.isRevised,
     submittedAt: record.submittedAt ? record.submittedAt.toISOString() : null,
+    archivedAt: record.archivedAt ? record.archivedAt.toISOString() : null,
     signedByName: record.signedByName,
     signedByTitle: record.signedByTitle,
     photoCount: record._count.photos,
