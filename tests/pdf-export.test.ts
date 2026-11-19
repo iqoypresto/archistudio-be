@@ -1,4 +1,4 @@
-import { ReportStatus, WeatherType } from "@prisma/client";
+import { WeatherType } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/configs/prisma-client.config.js";
 import { PdfExportService } from "../src/features/pdf-export/pdf-export.service.js";
@@ -80,7 +80,7 @@ describe("TASK-08 Backend Export PDF Laporan Harian Opsi A (US-15, BR-27..BR-31)
           ],
         },
       ],
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof prisma.project.findFirst>>);
 
     const result = await PdfExportService.generateDailyReportPdf("proj-1", "2026-11-05");
 

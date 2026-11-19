@@ -46,6 +46,7 @@
     "supertest": "latest",
     "tsx": "latest",
     "typescript": "latest",
+    "typescript-eslint": "^8.73.0",
     "vitest": "latest"
   }
 }

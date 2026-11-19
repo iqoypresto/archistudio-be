@@ -1,4 +1,4 @@
-import type { Content, TDocumentDefinitions } from "pdfmake/interfaces.js";
+import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces.js";
 import type { PdfAreaReportData, PdfDocumentData } from "./pdf-export.type.js";
 
 function buildAreaHeader(area: PdfAreaReportData): Content {
@@ -41,8 +41,8 @@ function buildWorkDetails(area: PdfAreaReportData): Content[] {
   ];
 }
 
-function buildPhotoCells(photos: PdfAreaReportData["photos"]) {
-  const rows: unknown[][] = [];
+function buildPhotoCells(photos: PdfAreaReportData["photos"]): TableCell[][] {
+  const rows: TableCell[][] = [];
   for (let i = 0; i < photos.length; i += 2) {
     const p1 = photos[i];
     const p2 = photos[i + 1];
@@ -64,7 +64,7 @@ function buildPhotoGrid(photos: PdfAreaReportData["photos"]): Content[] {
   const rows = buildPhotoCells(photos);
   return [
     { text: "Dokumentasi Foto Lapangan:", bold: true, margin: [0, 8, 0, 4] as [number, number, number, number] },
-    { table: { widths: ["50%", "50%"], body: rows as any }, layout: "noBorders", margin: [0, 0, 0, 6] as [number, number, number, number] },
+    { table: { widths: ["50%", "50%"], body: rows }, layout: "noBorders", margin: [0, 0, 0, 6] as [number, number, number, number] },
   ];
 }
 

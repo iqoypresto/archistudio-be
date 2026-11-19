@@ -10,7 +10,7 @@ describe("TASK-08 Backend Buka Kunci Area Tertunggak (BR-22)", () => {
       code: "A",
       name: "Struktur",
       projectId: "proj-1",
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof prisma.area.findFirst>>);
 
     vi.spyOn(prisma.reportUnlock, "create").mockResolvedValue({
       id: "unlock-1",
@@ -24,7 +24,7 @@ describe("TASK-08 Backend Buka Kunci Area Tertunggak (BR-22)", () => {
         name: "Budi Santoso",
         role: Role.OWNER,
       },
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof prisma.reportUnlock.create>>);
 
     const result = await ReportUnlockService.unlockArea("area-1", "owner-1", {
       unlockedThroughDate: "2026-11-05",

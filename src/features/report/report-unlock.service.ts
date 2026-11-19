@@ -1,6 +1,5 @@
 import { prisma } from "../../configs/prisma-client.config.js";
 import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
-import { AppErrors } from "../../utils/errors/errors.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import type { UnlockAreaBody } from "./report-unlock.validation.js";
 
