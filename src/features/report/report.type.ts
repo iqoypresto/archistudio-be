@@ -27,6 +27,7 @@ export interface ReportSnapshotJson {
     caption: string | null;
     sortOrder: number;
     takenAt: string | null;
+    uploadedAt: string | null;
   }>;
 }
 
@@ -35,6 +36,7 @@ export interface ReportPhotoInput {
   caption?: string | null;
   sortOrder: number;
   takenAt?: string | null;
+  uploadedAt?: string | null;
 }
 
 export interface DailyReportPhotoDto {
@@ -44,6 +46,7 @@ export interface DailyReportPhotoDto {
   caption: string | null;
   sortOrder: number;
   takenAt: string | null;
+  uploadedAt: string | null;
 }
 
 export interface DailyReportRevisionDto {
@@ -62,6 +65,7 @@ export interface DailyReportListItem {
   reportType: ReportType;
   status: ReportStatus;
   isLate: boolean;
+  lateLabel: string | null;
   isRevised: boolean;
   submittedAt: string | null;
   signedByName: string | null;

@@ -23,4 +23,6 @@ export interface SignedPhotoViewItem {
   viewUrl: string;
   caption: string | null;
   sortOrder: number;
+  takenAt: string | null;
+  uploadedAt: string | null;
 }

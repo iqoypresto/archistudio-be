@@ -69,6 +69,8 @@ export class UploadRepository {
             storageKey: true,
             caption: true,
             sortOrder: true,
+            takenAt: true,
+            uploadedAt: true,
           },
         },
         area: {

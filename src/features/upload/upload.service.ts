@@ -135,6 +135,8 @@ export class UploadService {
       viewUrl: urlMap[photo.storageKey] ?? "",
       caption: photo.caption,
       sortOrder: photo.sortOrder,
+      takenAt: photo.takenAt?.toISOString() ?? null,
+      uploadedAt: photo.uploadedAt?.toISOString() ?? null,
     }));
   }
 }

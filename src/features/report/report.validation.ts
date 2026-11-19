@@ -8,7 +8,7 @@ const photoInputSchema = z.object({
   storageKey: z.string().trim().min(1, "Storage key foto wajib diisi."),
   caption: z.string().trim().max(250).nullable().optional(),
   sortOrder: z.number().int().nonnegative(),
-  takenAt: z.string().datetime().nullable().optional(),
+  takenAt: z.string().trim().max(40).nullable().optional(),
 });
 
 const draftContentSchema = z.object({

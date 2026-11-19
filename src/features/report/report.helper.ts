@@ -79,6 +79,7 @@ export function mapReportListItem(record: ReportListRecord): DailyReportListItem
     reportType: record.reportType,
     status: record.status,
     isLate: record.isLate,
+    lateLabel: record.isLate ? "Diunggah terlambat" : null,
     isRevised: record.isRevised,
     submittedAt: record.submittedAt ? record.submittedAt.toISOString() : null,
     signedByName: record.signedByName,
@@ -121,6 +122,7 @@ export function mapReportDetail(
       caption: photo.caption,
       sortOrder: photo.sortOrder,
       takenAt: photo.takenAt ? photo.takenAt.toISOString() : null,
+      uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
     })),
     revisions: record.revisions.map((rev) => ({
       id: rev.id,
@@ -156,6 +158,7 @@ export function buildRevisionSnapshotJson(
       caption: photo.caption,
       sortOrder: photo.sortOrder,
       takenAt: photo.takenAt ? photo.takenAt.toISOString() : null,
+      uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
     })),
   };
 }

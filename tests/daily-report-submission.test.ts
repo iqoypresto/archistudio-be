@@ -73,13 +73,22 @@ describe("TASK-07 Daily Report Draft & Submit API", () => {
       [TEST_PHOTO_KEY]: "https://r2/view",
     });
 
-    const res = await invokeApp<ApiEnvelope<{ reportNumber: string; isLate: boolean }>>(app, {
+    vi.spyOn(storageAdapter.StorageAdapter, "getObjectLastModified").mockResolvedValue({
+      exists: true,
+      lastModified: new Date("2026-11-16T09:30:00.000Z"),
+    });
+    const res = await invokeApp<ApiEnvelope<{
+      reportNumber: string;
+      isLate: boolean;
+      lateLabel: string | null;
+    }>>(app, {
       method: "POST",
       path: `/api/v1/reports/${TEST_REPORT_ID}/submit`,
       headers: makeSupervisorAuthHeader(),
       body: { photos: [{ storageKey: TEST_PHOTO_KEY, caption: "Sloof", sortOrder: 0 }] },
     });
     expect(res.status).toBe(200);
+    expect(res.body.data?.lateLabel).toBeNull();
     expect(submitSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         isLate: false,
@@ -122,6 +131,10 @@ describe("TASK-07 Daily Report Draft & Submit API", () => {
     const submitSpy = vi.spyOn(ReportRepository, "submitReportTransaction").mockResolvedValue(
       makeReportRecord({ status: ReportStatus.SUBMITTED, reportType: ReportType.NO_WORK, isLate: true }),
     );
+    vi.spyOn(storageAdapter.StorageAdapter, "getObjectLastModified").mockResolvedValue({
+      exists: true,
+      lastModified: new Date("2026-11-16T09:30:00.000Z"),
+    });
     vi.spyOn(storageAdapter, "createSignedViewUrlsMap").mockResolvedValue({
       [TEST_PHOTO_KEY]: "https://r2/view",
     });
@@ -136,7 +149,14 @@ describe("TASK-07 Daily Report Draft & Submit API", () => {
       },
     });
     expect(okNoWork.status).toBe(200);
+    expect(okNoWork.body.data?.isLate).toBe(true);
+    expect(okNoWork.body.data?.lateLabel).toBe("Diunggah terlambat");
     expect(submitSpy).toHaveBeenCalledWith(expect.objectContaining({ isLate: true }));
+    expect(submitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photos: [expect.objectContaining({ uploadedAt: "2026-11-16T09:30:00.000Z" })],
+      }),
+    );
   });
 
   it("mengunci updateDraft setelah SUBMITTED (BR-24) & memfilter riwayat supervisor (BR-03)", async () => {

@@ -21,6 +21,7 @@ import {
   toIsoDateOnly,
 } from "./report.helper.js";
 import { ReportRepository } from "./report.repository.js";
+import { enrichReportPhotoMetadata, mapStoredReportPhotos } from "./report.metadata.js";
 import type {
   DailyReportDetail,
   ListReportsQuery,
@@ -75,12 +76,13 @@ export class ReportService {
       now,
     });
     assertValidStorageKeys(body.photos ?? [], area.project.id, area.id);
+    const photos = await enrichReportPhotoMetadata(body.photos, area.project.timezone);
     if (existing) {
       const updated = await ReportRepository.updateDraftReport({
         reportId: existing.id,
         uploadedById: user.id,
         data: extractMutationFields(body),
-        photos: body.photos,
+        photos,
       });
       return hydrateReportDetail(updated);
     }
@@ -90,7 +92,7 @@ export class ReportService {
       supervisorId: user.id,
       reportDate: parseDateOnlyUtc(body.reportDate),
       data: extractMutationFields(body),
-      photos: body.photos ?? [],
+      photos: photos ?? [],
     });
     return hydrateReportDetail(created);
   }
@@ -110,11 +112,12 @@ export class ReportService {
     if (body.photos) {
       assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
     }
+    const photos = await enrichReportPhotoMetadata(body.photos, existing.area.project.timezone);
     const updated = await ReportRepository.updateDraftReport({
       reportId,
       uploadedById: user.id,
       data: extractMutationFields(body),
-      photos: body.photos,
+      photos,
     });
     return hydrateReportDetail(updated);
   }
@@ -142,15 +145,15 @@ export class ReportService {
       targetReportDate: reportDateStr,
       now,
     });
-    if (body.photos) {
-      assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
-    }
     assertSubmitCompleteness(buildMergedCompletenessInput(existing, body));
+    const photosToPersist = body.photos ?? mapStoredReportPhotos(existing.photos);
+    assertValidStorageKeys(photosToPersist, existing.area.project.id, existing.area.id);
+    const photos = await enrichReportPhotoMetadata(photosToPersist, existing.area.project.timezone);
     const submitted = await ReportRepository.submitReportTransaction({
       reportId,
       uploadedById: user.id,
       data: extractMutationFields(body),
-      photos: body.photos,
+      photos,
       submittedAt: now,
       isLate: isPastCutoff(now, reportDateStr, existing.area.project.timezone, 17),
       signedByName: user.name,
@@ -178,6 +181,7 @@ export class ReportService {
     if (body.photos) {
       assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
     }
+    const photos = await enrichReportPhotoMetadata(body.photos, existing.area.project.timezone);
     assertSubmitCompleteness(buildMergedCompletenessInput(existing, body));
     const snapshot = buildRevisionSnapshotJson(existing) as unknown as Prisma.InputJsonValue;
     const revised = await ReportRepository.reviseReportTransaction({
@@ -187,7 +191,7 @@ export class ReportService {
       changeSummary: body.changeSummary,
       previousSnapshotJson: snapshot,
       data: extractMutationFields(body),
-      photos: body.photos,
+      photos,
       revisedAt: now,
     });
     return hydrateReportDetail(revised);
