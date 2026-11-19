@@ -186,7 +186,8 @@ describe("TASK-04 Project Management — Unit & Integration Tests", () => {
     }));
   });
 
-  it("[Soft Delete / NFR-05] Admin berhasil mengarsipkan project", async () => {
+  it("[BR-39] Owner berhasil mengarsipkan project secara manual ke Archive", async () => {
+    const ownerActor = { ...adminActor, id: "user-owner-1", role: Role.OWNER, username: "owner1" };
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue({
       id: "proj-1",
       code: "VLA01",
@@ -198,19 +199,35 @@ describe("TASK-04 Project Management — Unit & Integration Tests", () => {
       status: ProjectStatus.BERJALAN,
       timezone: "Asia/Makassar",
       routineHolidays: [0],
+      completedAt: null,
+      archivedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       areas: [],
     });
 
-    const archiveSpy = vi.spyOn(ProjectRepository, "archive").mockResolvedValue({
+    const archivedAt = new Date("2026-11-19T12:00:00.000Z");
+    const archiveSpy = vi.spyOn(ProjectRepository, "markArchived").mockResolvedValue({
       id: "proj-1",
-      deletedAt: new Date(),
+      code: "VLA01",
+      name: "Villa Ubud Bali",
+      location: "Ubud, Bali",
+      clientName: "PT Graha Indah",
+      startDate: new Date("2026-11-01T00:00:00.000Z"),
+      endDate: null,
+      status: ProjectStatus.BERJALAN,
+      timezone: "Asia/Makassar",
+      routineHolidays: [0],
+      completedAt: null,
+      archivedAt,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
-    const result = await ProjectService.archiveProject(adminActor, "proj-1");
+    const result = await ProjectService.archiveProject(ownerActor, "proj-1", archivedAt);
     expect(result.id).toBe("proj-1");
-    expect(archiveSpy).toHaveBeenCalledWith("proj-1");
+    expect(result.archivedAt).toEqual(archivedAt);
+    expect(archiveSpy).toHaveBeenCalledWith("proj-1", archivedAt);
   });
 
   it("[API Integration] Endpoint GET /api/v1/projects mengembalikan daftar berpaginasi", async () => {
