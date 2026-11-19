@@ -13,6 +13,12 @@ projectRouter.get(
 );
 
 projectRouter.get(
+  "/archive",
+  AuthMiddleware.authorizeRoles("OWNER", "ADMIN"),
+  ProjectController.getArchivedProjects,
+);
+
+projectRouter.get(
   "/:id",
   AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SUPERVISOR"),
   ProjectController.getProjectById,
@@ -30,8 +36,20 @@ projectRouter.patch(
   ProjectController.updateProject,
 );
 
-projectRouter.patch(
+projectRouter.post(
+  "/:id/complete",
+  AuthMiddleware.authorizeRoles("OWNER"),
+  ProjectController.completeProject,
+);
+
+projectRouter.post(
   "/:id/archive",
-  AuthMiddleware.authorizeRoles("OWNER", "ADMIN"),
+  AuthMiddleware.authorizeRoles("OWNER"),
   ProjectController.archiveProject,
+);
+
+projectRouter.post(
+  "/:id/restore",
+  AuthMiddleware.authorizeRoles("OWNER"),
+  ProjectController.restoreProject,
 );
