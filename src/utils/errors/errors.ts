@@ -77,6 +77,11 @@ export const AppErrors = {
     status: StatusCodes.CONFLICT,
     message: "Laporan untuk area dan tanggal ini sudah dikirim.",
   },
+  UNLOCK_THRESHOLD_NOT_REACHED: {
+    code: "UNLOCK_THRESHOLD_NOT_REACHED",
+    status: StatusCodes.CONFLICT,
+    message: "Pembukaan kunci hanya tersedia setelah tunggakan melewati 3 hari kerja wajib lapor.",
+  },
   DUPLICATE_REPORT_NUMBER: {
     code: "DUPLICATE_REPORT_NUMBER",
     status: StatusCodes.CONFLICT,

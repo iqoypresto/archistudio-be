@@ -1,11 +1,7 @@
 import { ReportStatus } from "@prisma/client";
-import {
-  computeAreaLockState,
-  isRestDay,
-  toBusinessDateString,
-  type AreaLockState,
-} from "../../helpers/date.helper.js";
+import { isRestDay, toBusinessDateString } from "../../helpers/date.helper.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
+import { evaluateAreaLock } from "./report-lock.helper.js";
 import {
   ReportLockRepository,
   type ActiveAssignmentRecord,
@@ -39,29 +35,6 @@ function resolveDraftReport(
   };
 }
 
-/** Menghitung lock state & daftar tanggal terkirim untuk satu area (BR-11, BR-20). */
-function evaluateAreaLock(
-  record: ActiveAssignmentRecord,
-  todayDate: string,
-): { lockState: AreaLockState; submittedDates: string[] } {
-  const { project, reports, unlocks } = record.area;
-  const submittedDates = reports
-    .filter((r) => r.status === ReportStatus.SUBMITTED)
-    .map((r) => toDateStr(r.reportDate));
-  const latestUnlock = unlocks[0];
-  const lockState = computeAreaLockState({
-    projectStartDate: toDateStr(project.startDate),
-    projectEndDate: project.endDate ? toDateStr(project.endDate) : null,
-    assignmentStartDate: toDateStr(record.startDate),
-    assignmentEndDate: record.endDate ? toDateStr(record.endDate) : null,
-    todayDate,
-    routineHolidays: project.routineHolidays,
-    submittedDates,
-    unlockedThroughDate: latestUnlock ? toDateStr(latestUnlock.unlockedThroughDate) : null,
-  });
-  return { lockState, submittedDates };
-}
-
 /** Memetakan satu record penugasan menjadi status kewajiban lapor terhitung. */
 function mapAssignmentToAreaTaskStatus(
   record: ActiveAssignmentRecord,
@@ -71,7 +44,17 @@ function mapAssignmentToAreaTaskStatus(
   const { area } = record;
   const { project } = area;
   const todayDate = toBusinessDateString(now, project.timezone);
-  const { lockState, submittedDates } = evaluateAreaLock(record, todayDate);
+  const latestUnlock = area.unlocks[0];
+  const { lockState, submittedDates } = evaluateAreaLock({
+    projectStartDate: area.project.startDate,
+    projectEndDate: area.project.endDate,
+    assignmentStartDate: record.startDate,
+    assignmentEndDate: record.endDate,
+    todayDate,
+    routineHolidays: area.project.routineHolidays,
+    reports: area.reports,
+    unlockedThroughDate: latestUnlock?.unlockedThroughDate ?? null,
+  });
   const draft = resolveDraftReport(area.reports, supervisorId, lockState.nextRequiredDate, todayDate);
   return {
     areaId: area.id,

@@ -38,7 +38,6 @@ export class ReportLockRepository {
               },
             },
             reports: {
-              where: { archivedAt: null },
               select: {
                 id: true,
                 reportDate: true,

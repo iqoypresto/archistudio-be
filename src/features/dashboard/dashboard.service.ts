@@ -1,11 +1,11 @@
 import { ReportStatus } from "@prisma/client";
 import {
-  computeAreaLockState,
   isRestDay,
   parseDateOnlyUtc,
   toBusinessDateString,
 } from "../../helpers/date.helper.js";
 import { DashboardRepository } from "./dashboard.repository.js";
+import { evaluateAreaLock } from "../report/report-lock.helper.js";
 import type {
   AreaDailyStatusType,
   DashboardAreaStatusItem,
@@ -48,20 +48,16 @@ function evaluateAreaItem(
   targetDate: string,
 ): DashboardAreaStatusItem {
   const assignment = area.assignments[0];
-  const submittedDates = area.reports
-    .filter((r) => r.status === ReportStatus.SUBMITTED)
-    .map((r) => toDateStr(r.reportDate));
   const latestUnlock = area.unlocks[0];
-
-  const lockState = computeAreaLockState({
-    projectStartDate: toDateStr(area.project.startDate),
-    projectEndDate: area.project.endDate ? toDateStr(area.project.endDate) : null,
-    assignmentStartDate: assignment ? toDateStr(assignment.startDate) : toDateStr(area.project.startDate),
-    assignmentEndDate: assignment?.endDate ? toDateStr(assignment.endDate) : null,
+  const { lockState } = evaluateAreaLock({
+    projectStartDate: area.project.startDate,
+    projectEndDate: area.project.endDate,
+    assignmentStartDate: assignment?.startDate ?? area.project.startDate,
+    assignmentEndDate: assignment?.endDate ?? null,
     todayDate: targetDate,
     routineHolidays: area.project.routineHolidays,
-    submittedDates,
-    unlockedThroughDate: latestUnlock ? toDateStr(latestUnlock.unlockedThroughDate) : null,
+    reports: area.reports,
+    unlockedThroughDate: latestUnlock?.unlockedThroughDate ?? null,
   });
 
   const targetReport = area.reports.find(

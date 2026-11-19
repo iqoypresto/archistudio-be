@@ -60,7 +60,6 @@ export class DashboardRepository {
           },
         },
         reports: {
-          where: { archivedAt: null },
           orderBy: { reportDate: "desc" },
           select: {
             id: true,
