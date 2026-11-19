@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" \"prisma/**/*.ts\"",
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -33,6 +33,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bcryptjs": "latest",
     "@types/cors": "latest",
     "@types/express": "latest",
@@ -41,11 +42,13 @@
     "@types/node": "latest",
     "@types/pdfmake": "latest",
     "@types/supertest": "latest",
-    "eslint": "latest",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
     "prisma": "^6.19.3",
     "supertest": "latest",
     "tsx": "latest",
     "typescript": "latest",
+    "typescript-eslint": "^8.73.0",
     "vitest": "latest"
   }
 }
