@@ -2,6 +2,7 @@ import { Prisma, ProjectStatus, ReportStatus, ReportType, WeatherType } from "@p
 import { describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/configs/prisma-client.config.js";
 import { PdfExportService } from "../src/features/pdf-export/pdf-export.service.js";
+import { ReportArchiveService } from "../src/features/report/report-archive.service.js";
 import { buildTemplateADefinition } from "../src/features/pdf-export/pdf-export.template-a.js";
 
 type ProjectWithReportPhotos = Prisma.ProjectGetPayload<{
@@ -58,6 +59,7 @@ describe("TASK-08 Backend Export PDF Laporan Harian Opsi A (US-15, BR-27..BR-31)
   });
 
   it("[US-15 / BR-30] menghasilkan buffer biner PDF dengan format nama file LH-KODE-YYYYMMDD", async () => {
+    vi.spyOn(ReportArchiveService, "process").mockResolvedValue(undefined);
     const createdAt = new Date("2026-11-01T00:00:00.000Z");
     const updatedAt = new Date("2026-11-05T00:00:00.000Z");
     const project: ProjectWithReportPhotos = {

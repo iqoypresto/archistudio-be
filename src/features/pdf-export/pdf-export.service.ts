@@ -1,5 +1,5 @@
-import { ReportStatus } from "@prisma/client";
-import { prisma } from "../../configs/prisma-client.config.js";
+import { fetchProjectAndAreas } from "./pdf-export.repository.js";
+import { ReportArchiveService } from "../report/report-archive.service.js";
 import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
@@ -7,27 +7,8 @@ import { loadPdfMake } from "../../utils/pdf/pdfmake.loader.js";
 import { buildTemplateADefinition } from "./pdf-export.template-a.js";
 import type { PdfAreaReportData, PdfDocumentData, PdfPhotoItem } from "./pdf-export.type.js";
 
-type AreaWithReports = Awaited<ReturnType<typeof fetchProjectAndAreas>>["areas"][number];
+type AreaWithReports = NonNullable<Awaited<ReturnType<typeof fetchProjectAndAreas>>>["areas"][number];
 
-async function fetchProjectAndAreas(projectId: string, reportDateUtc: Date) {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, deletedAt: null },
-    include: {
-      areas: {
-        where: { deletedAt: null },
-        orderBy: { code: "asc" },
-        include: {
-          reports: {
-            where: { reportDate: reportDateUtc, status: ReportStatus.SUBMITTED, archivedAt: null },
-            include: { photos: { orderBy: { sortOrder: "asc" } } },
-          },
-        },
-      },
-    },
-  });
-  if (!project) throw new ResponseError("RESOURCE_NOT_FOUND");
-  return project;
-}
 
 async function resolvePhotoDataUrl(storageKey: string): Promise<string | null> {
   try {
@@ -88,7 +69,9 @@ export class PdfExportService {
     dateStr: string,
   ): Promise<{ filename: string; buffer: Buffer }> {
     const reportDateUtc = parseDateOnlyUtc(dateStr);
+    await ReportArchiveService.process({ area: { projectId, deletedAt: null, project: { deletedAt: null } }, reportDate: reportDateUtc });
     const project = await fetchProjectAndAreas(projectId, reportDateUtc);
+    if (!project) throw new ResponseError("RESOURCE_NOT_FOUND");
 
     const areasData: PdfAreaReportData[] = [];
     for (const a of project.areas) {

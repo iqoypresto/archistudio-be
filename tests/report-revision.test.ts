@@ -12,6 +12,9 @@ import {
 } from "./helpers/report-fixture.helper.js";
 
 vi.mock("../src/configs/prisma-client.config.js", () => ({ prisma: {} }));
+vi.mock("../src/features/report/report-archive.service.js", () => ({
+  ReportArchiveService: { process: vi.fn().mockResolvedValue(undefined) },
+}));
 
 interface ApiEnvelope<T = Record<string, unknown>> {
   success: boolean;

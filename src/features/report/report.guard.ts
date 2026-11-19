@@ -101,7 +101,6 @@ export function buildReportsWhere(
   user: AuthenticatedUser,
 ): Prisma.DailyReportWhereInput {
   const where: Prisma.DailyReportWhereInput = {
-    archivedAt: null,
     area: {
       deletedAt: null,
       projectId: query.projectId,

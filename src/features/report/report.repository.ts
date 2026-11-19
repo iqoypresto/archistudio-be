@@ -29,7 +29,6 @@ export class ReportRepository {
         },
         assignments: { select: { supervisorId: true, startDate: true, endDate: true } },
         reports: {
-          where: { archivedAt: null },
           select: { id: true, reportDate: true, status: true },
         },
         unlocks: {
@@ -46,7 +45,6 @@ export class ReportRepository {
     return prisma.dailyReport.findFirst({
       where: {
         id: reportId,
-        archivedAt: null,
         area: { deletedAt: null, project: { deletedAt: null } },
       },
       include: REPORT_DETAIL_INCLUDE,
@@ -121,6 +119,7 @@ export class ReportRepository {
     data: DraftMutationData;
     photos?: ReportPhotoInput[];
     submittedAt: Date;
+    archivedAt: Date | null;
     isLate: boolean;
     signedByName: string;
     signedByTitle: string;
@@ -133,6 +132,7 @@ export class ReportRepository {
           ...input.data,
           status: ReportStatus.SUBMITTED,
           submittedAt: input.submittedAt,
+          archivedAt: input.archivedAt,
           isLate: input.isLate,
           signedByName: input.signedByName,
           signedByTitle: input.signedByTitle,

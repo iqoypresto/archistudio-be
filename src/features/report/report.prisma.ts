@@ -10,6 +10,7 @@ export const REPORT_LIST_SELECT = Prisma.validator<Prisma.DailyReportSelect>()({
   isLate: true,
   isRevised: true,
   submittedAt: true,
+  archivedAt: true,
   signedByName: true,
   signedByTitle: true,
   area: {
@@ -50,7 +51,7 @@ export const REPORT_DETAIL_INCLUDE = Prisma.validator<Prisma.DailyReportInclude>
         select: { unlockedThroughDate: true },
       },
       reports: {
-        where: { archivedAt: null, status: ReportStatus.SUBMITTED },
+        where: { status: ReportStatus.SUBMITTED },
         select: { reportDate: true },
       },
     },

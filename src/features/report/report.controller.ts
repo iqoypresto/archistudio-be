@@ -5,6 +5,7 @@ import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { validate } from "../../validations/validate.js";
 import { ReportLockService } from "./report-lock.service.js";
 import { ReportService } from "./report.service.js";
+import { ReportReadService } from "./report-read.service.js";
 import { ReportUnlockService } from "./report-unlock.service.js";
 import {
   unlockAreaBodySchema,
@@ -13,6 +14,14 @@ import {
 import { ReportValidation } from "./report.validation.js";
 
 export class ReportController {
+  /** Arsip harian Owner/Admin (US-26, BR-25). */
+  static async listArchive(req: Request, res: Response): Promise<void> {
+    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
+    const query = validate(ReportValidation.QUERY.archive, req.query);
+    const { items, meta } = await ReportReadService.list(query, req.user, true);
+    ResponseHelper.paginated(res, COMMON_MESSAGES.FETCHED, items, meta);
+  }
+
   /** Mengembalikan status tugas harian & kunci bertahap area milik supervisor (US-07, US-10). */
   static async getMyAreasStatus(req: Request, res: Response): Promise<void> {
     if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
