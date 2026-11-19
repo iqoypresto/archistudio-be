@@ -1,4 +1,4 @@
-import { ReportStatus, Role } from "@prisma/client";
+import { ReportStatus } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { DashboardRepository } from "../src/features/dashboard/dashboard.repository.js";
 import { DashboardService } from "../src/features/dashboard/dashboard.service.js";
