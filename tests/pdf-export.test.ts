@@ -9,6 +9,7 @@ type ProjectWithReportPhotos = Prisma.ProjectGetPayload<{
   include: {
     areas: {
       include: {
+        assignments: true;
         reports: {
           include: { photos: true };
         };
@@ -87,6 +88,16 @@ describe("TASK-08 Backend Export PDF Laporan Harian Opsi A (US-15, BR-27..BR-31)
           deletedAt: null,
           createdAt,
           updatedAt,
+          assignments: [{
+            id: "assignment-1",
+            areaId: "area-1",
+            supervisorId: "supervisor-1",
+            assignedById: "owner-1",
+            startDate: new Date("2026-11-01T00:00:00.000Z"),
+            endDate: null,
+            createdAt,
+            updatedAt,
+          }],
           reports: [
             {
               id: "rep-1",

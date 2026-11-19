@@ -5,6 +5,7 @@ import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { loadPdfMake } from "../../utils/pdf/pdfmake.loader.js";
 import { buildTemplateADefinition } from "./pdf-export.template-a.js";
+import { findMissingReportAreas } from "./pdf-export.helper.js";
 import type { PdfAreaReportData, PdfDocumentData, PdfPhotoItem } from "./pdf-export.type.js";
 
 type AreaWithReports = NonNullable<Awaited<ReturnType<typeof fetchProjectAndAreas>>>["areas"][number];
@@ -63,7 +64,7 @@ async function mapAreaReport(area: AreaWithReports): Promise<PdfAreaReportData> 
 }
 
 export class PdfExportService {
-  /** Menghasilkan buffer file PDF Laporan Harian Opsi A per project per tanggal (US-15, BR-27..BR-31). */
+  /** Menghasilkan PDF hanya setelah semua area wajib lapor lengkap (US-27, BR-29, BR-30). */
   static async generateDailyReportPdf(
     projectId: string,
     dateStr: string,
@@ -72,9 +73,23 @@ export class PdfExportService {
     await ReportArchiveService.process({ area: { projectId, deletedAt: null, project: { deletedAt: null } }, reportDate: reportDateUtc });
     const project = await fetchProjectAndAreas(projectId, reportDateUtc);
     if (!project) throw new ResponseError("RESOURCE_NOT_FOUND");
+    const requiredAreas = findMissingReportAreas({
+      areas: project.areas,
+      reportDate: dateStr,
+      projectStart: project.startDate,
+      projectEnd: project.endDate,
+      routineHolidays: project.routineHolidays,
+    });
+    const submittedAreaIds = new Set(project.areas.filter((area) => area.reports.length > 0).map((area) => area.id));
+    const incomplete = requiredAreas.filter((area) => !submittedAreaIds.has(area.id));
+    if (incomplete.length > 0) {
+      throw new ResponseError("DAILY_REPORTS_INCOMPLETE", undefined, {
+        missingAreas: incomplete.map((area) => `${area.code} — ${area.name}`),
+      });
+    }
 
     const areasData: PdfAreaReportData[] = [];
-    for (const a of project.areas) {
+    for (const a of project.areas.filter((area) => requiredAreas.some((required) => required.id === area.id))) {
       areasData.push(await mapAreaReport(a));
     }
 
