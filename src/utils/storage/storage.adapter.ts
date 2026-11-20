@@ -1,5 +1,11 @@
 import crypto from "node:crypto";
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../configs/env.config.js";
 import { ResponseError } from "../errors/response-error.util.js";
@@ -141,6 +147,22 @@ export async function createSignedViewUrlsMap(
   return Object.fromEntries(pairs);
 }
 
+/** Menghapus objek secara permanen dari bucket R2/S3 (khusus dokumen keluar BR-34). */
+export async function deleteObject(storageKey: string): Promise<void> {
+  try {
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: env.STORAGE_BUCKET,
+        Key: storageKey,
+      }),
+    );
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404) return;
+    throw error;
+  }
+}
+
 export const StorageAdapter = {
   buildReportPhotoStorageKey,
   buildPurposeStorageKey,
@@ -149,4 +171,5 @@ export const StorageAdapter = {
   createSignedViewUrlsMap,
   getObjectLastModified,
   getObjectBuffer,
+  deleteObject,
 };
