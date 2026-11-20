@@ -1,6 +1,6 @@
 import { Prisma, ProjectStatus } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
-import type { ProjectDetail, ProjectListItem } from "./project.type.js";
+import type { ProjectDetail, ProjectListItem, ProjectOption } from "./project.type.js";
 
 const projectSelect = Prisma.validator<Prisma.ProjectSelect>()({
   id: true,
@@ -47,6 +47,27 @@ export interface FindProjectsParams {
 }
 
 export class ProjectRepository {
+  /** Mengambil opsi project aktif untuk dropdown dengan scope supervisor (BR-03, BR-40). */
+  static async findOptions(supervisorUserId?: string): Promise<ProjectOption[]> {
+    return prisma.project.findMany({
+      where: {
+        deletedAt: null,
+        archivedAt: null,
+        status: { in: [ProjectStatus.PERSIAPAN, ProjectStatus.BERJALAN] },
+        ...(supervisorUserId && {
+          areas: {
+            some: {
+              deletedAt: null,
+              assignments: { some: { supervisorId: supervisorUserId, endDate: null } },
+            },
+          },
+        }),
+      },
+      select: { id: true, code: true, name: true },
+      orderBy: [{ code: "asc" }, { name: "asc" }],
+    });
+  }
+
   /** Mengambil daftar project aktif (non-arsip & non-selesai) berpaginasi (US-04, BR-03, BR-39). */
   static async findManyAndCount(params: FindProjectsParams): Promise<[ProjectListItem[], number]> {
     const where: Prisma.ProjectWhereInput = {

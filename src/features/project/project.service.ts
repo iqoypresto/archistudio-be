@@ -16,6 +16,7 @@ import type {
   GetProjectsQuery,
   ProjectDetail,
   ProjectListItem,
+  ProjectOption,
   RestoreProjectDTO,
   UpdateProjectDTO,
 } from "./project.type.js";
@@ -27,6 +28,12 @@ function assertManagerRole(actor: AuthenticatedUser, message: string): void {
 }
 
 export class ProjectService {
+  /** Menyediakan opsi dropdown project ringkas sesuai akses role (BR-03, BR-40). */
+  static async getProjectOptions(actor: AuthenticatedUser): Promise<ProjectOption[]> {
+    const supervisorUserId = actor.role === "SUPERVISOR" ? actor.id : undefined;
+    return ProjectRepository.findOptions(supervisorUserId);
+  }
+
   /** Mengambil daftar project aktif dengan paginasi dan filter RBAC (US-04, BR-03, BR-39). */
   static async getProjects(actor: AuthenticatedUser, query: GetProjectsQuery) {
     const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(query.page, query.pageSize);

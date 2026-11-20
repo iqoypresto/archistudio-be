@@ -8,6 +8,13 @@ import { ProjectService } from "./project.service.js";
 import { ProjectValidation } from "./project.validation.js";
 
 export class ProjectController {
+  /** Mengambil opsi ringkas project aktif untuk dropdown. */
+  static async getProjectOptions(req: Request, res: Response): Promise<void> {
+    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
+    const projects = await ProjectService.getProjectOptions(req.user);
+    ResponseHelper.ok(res, PROJECT_MESSAGES.OPTIONS_FETCHED, projects);
+  }
+
   /** Mengambil daftar project aktif berpaginasi (US-04). */
   static async getProjects(req: Request, res: Response): Promise<void> {
     if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");

@@ -8,6 +8,12 @@ export type CreateProjectDTO = z.infer<typeof ProjectValidation.BODY.create>;
 export type UpdateProjectDTO = z.infer<typeof ProjectValidation.BODY.update>;
 export type RestoreProjectDTO = z.infer<typeof ProjectValidation.BODY.restore>;
 
+export interface ProjectOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export type ArchiveType = "COMPLETED" | "MANUAL";
 
 export interface ProjectListItem {

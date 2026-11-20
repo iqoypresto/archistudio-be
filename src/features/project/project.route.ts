@@ -13,6 +13,12 @@ projectRouter.get(
 );
 
 projectRouter.get(
+  "/options",
+  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SUPERVISOR"),
+  ProjectController.getProjectOptions,
+);
+
+projectRouter.get(
   "/archive",
   AuthMiddleware.authorizeRoles("OWNER", "ADMIN"),
   ProjectController.getArchivedProjects,

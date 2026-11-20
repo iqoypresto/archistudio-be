@@ -16,6 +16,7 @@ export const USER_MESSAGES = {
 
 export const PROJECT_MESSAGES = {
   LIST_FETCHED: "Daftar project berhasil diambil.",
+  OPTIONS_FETCHED: "Opsi project berhasil diambil.",
   DETAIL_FETCHED: "Detail project berhasil diambil.",
   CREATED: "Project berhasil dibuat.",
   UPDATED: "Data project berhasil diperbarui.",
