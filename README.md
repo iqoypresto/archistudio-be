@@ -67,16 +67,15 @@ JWT_REFRESH_EXPIRES_DAYS=30
 
 # Backblaze B2 (S3-Compatible Storage)
 STORAGE_PROVIDER="b2"
-STORAGE_ENDPOINT="https://s3.<bucket-region>.backblazeb2.com"
-STORAGE_REGION="<bucket-region>"
-STORAGE_BUCKET="archistudio-reports"
-STORAGE_ACCESS_KEY_ID="isi-application-key-id"
+STORAGE_ENDPOINT="<endpoint-url-dari-detail-bucket>"
+STORAGE_BUCKET="<bucket-name>"
+STORAGE_ACCESS_KEY_ID="isi-keyId"
 STORAGE_SECRET_ACCESS_KEY="isi-application-key"
 STORAGE_UPLOAD_EXPIRES_SECONDS=300
 STORAGE_VIEW_EXPIRES_SECONDS=900
 ```
 
-Gunakan bucket private dan application key yang dibatasi ke bucket ini. Izin yang diperlukan adalah `readFiles`, `writeFiles`, dan `deleteFiles` (operasi hapus membutuhkan dua izin terakhir). `STORAGE_REGION` harus sama dengan region bucket; endpoint mengikuti format `https://s3.<region>.backblazeb2.com`. Untuk unggah langsung dari browser, tambahkan origin frontend pada CORS bucket dan izinkan metode `PUT` serta header `Content-Type`.
+Masukkan `keyId` ke `STORAGE_ACCESS_KEY_ID`, `applicationKey` ke `STORAGE_SECRET_ACCESS_KEY`, `bucket name` ke `STORAGE_BUCKET`, dan `endpoint URL` ke `STORAGE_ENDPOINT`. Region signing dibaca otomatis dari endpoint B2, jadi `STORAGE_REGION` tidak perlu diisi. `keyName` dan `bucket id` tidak dipakai oleh aplikasi. Gunakan bucket private serta application key yang dibatasi ke bucket ini dengan izin baca, tulis, dan hapus. Untuk upload langsung dari browser, tambahkan origin frontend pada CORS bucket dan izinkan metode `PUT` serta header `Content-Type`.
 
 ---
 

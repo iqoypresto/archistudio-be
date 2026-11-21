@@ -10,6 +10,22 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../configs/env.config.js";
 import { ResponseError } from "../errors/response-error.util.js";
 
+function normalizeStorageEndpoint(): string {
+  if (env.STORAGE_PROVIDER !== "b2" || /^https?:\/\//i.test(env.STORAGE_ENDPOINT)) {
+    return env.STORAGE_ENDPOINT;
+  }
+  return `https://${env.STORAGE_ENDPOINT}`;
+}
+
+function resolveStorageRegion(endpoint: string): string {
+  if (env.STORAGE_PROVIDER !== "b2") return env.STORAGE_REGION;
+  const region = new URL(endpoint).hostname.match(
+    /(?:^|\.)s3\.([a-z0-9-]+)\.backblazeb2\.com$/i,
+  )?.[1];
+  if (!region) throw new Error("STORAGE_ENDPOINT harus berupa endpoint regional Backblaze B2.");
+  return region;
+}
+
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -21,10 +37,11 @@ const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
 };
 const REPORT_PHOTO_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const storageEndpoint = normalizeStorageEndpoint();
 
 const s3Client = new S3Client({
-  region: env.STORAGE_REGION,
-  endpoint: env.STORAGE_ENDPOINT,
+  region: resolveStorageRegion(storageEndpoint),
+  endpoint: storageEndpoint,
   forcePathStyle: env.STORAGE_PROVIDER === "minio",
   credentials: {
     accessKeyId: env.STORAGE_ACCESS_KEY_ID,
