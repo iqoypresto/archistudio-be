@@ -23,7 +23,7 @@ const envSchema = z.object({
     .default("test-refresh-secret-key-min-16-chars"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_DAYS: z.coerce.number().int().positive().default(30),
-  STORAGE_PROVIDER: z.enum(["r2", "s3", "minio"]).default("r2"),
+  STORAGE_PROVIDER: z.enum(["b2", "r2", "s3", "minio"]).default("r2"),
   STORAGE_ENDPOINT: z.string().default("https://example.r2.cloudflarestorage.com"),
   STORAGE_REGION: z.string().default("auto"),
   STORAGE_BUCKET: z.string().default("archistudio-reports"),

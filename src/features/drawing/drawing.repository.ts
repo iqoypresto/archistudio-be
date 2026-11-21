@@ -33,7 +33,7 @@ export class DrawingRepository {
     });
   }
 
-  /** Menyimpan metadata Drawing baru setelah direct upload ke R2 (US-18, BR-32, BR-33). */
+  /** Menyimpan metadata Drawing baru setelah direct upload ke object storage (US-18, BR-32, BR-33). */
   static async create(data: {
     projectId: string;
     direction: DrawingDirection;

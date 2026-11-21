@@ -75,7 +75,7 @@ function resolvePurposeFolder(purpose: PurposeUpload, referenceId: string, categ
   return `projects/${referenceId}/comms-attachments`;
 }
 
-/** Menghasilkan presigned PUT URL agar browser HP mengunggah langsung ke R2/S3. */
+/** Menghasilkan presigned PUT URL agar browser mengunggah langsung ke object storage. */
 export async function createSignedUploadUrl(params: {
   storageKey: string;
   contentType: string;
@@ -103,7 +103,7 @@ export async function createSignedViewUrl(
   return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
 }
 
-/** Mengambil buffer biner objek langsung dari S3/R2 (khusus kompilasi PDF). */
+/** Mengambil buffer biner objek langsung dari object storage (khusus kompilasi PDF). */
 export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
   const command = new GetObjectCommand({
     Bucket: env.STORAGE_BUCKET,
@@ -147,7 +147,7 @@ export async function createSignedViewUrlsMap(
   return Object.fromEntries(pairs);
 }
 
-/** Menghapus objek secara permanen dari bucket R2/S3 (khusus dokumen keluar BR-34). */
+/** Menghapus objek secara permanen dari object storage (khusus dokumen keluar BR-34). */
 export async function deleteObject(storageKey: string): Promise<void> {
   try {
     await s3Client.send(

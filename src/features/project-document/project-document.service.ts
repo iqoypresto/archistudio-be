@@ -60,7 +60,7 @@ export class ProjectDocumentService {
     return formatProjectDocumentItem(created, viewUrl);
   }
 
-  /** Menghapus permanen dokumen keluar (objek R2 + record DB) oleh OWNER (US-19, AC-19.1, BR-34). */
+  /** Menghapus permanen dokumen keluar (objek storage + record DB) oleh OWNER (US-19, AC-19.1, BR-34). */
   static async deleteDocument(
     actor: AuthenticatedUser,
     documentId: string,

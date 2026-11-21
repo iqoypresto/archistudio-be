@@ -7,7 +7,7 @@ import { UploadService } from "./upload.service.js";
 import { UploadValidation } from "./upload.validation.js";
 
 export class UploadController {
-  /** Menghasilkan presigned PUT URL R2 untuk unggah langsung foto laporan (US-08). */
+  /** Menghasilkan presigned PUT URL untuk unggah langsung foto laporan (US-08). */
   static async signUploadUrls(req: Request, res: Response): Promise<void> {
     if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
     const body = validate(UploadValidation.BODY.sign, req.body);

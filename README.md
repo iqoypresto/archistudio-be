@@ -11,7 +11,7 @@
 - **Bahasa**: TypeScript 5.x (Strict mode, no `any`, no `@ts-ignore`)
 - **Database & ORM**: PostgreSQL via Supabase Pooler + Prisma ORM 6.x
 - **Autentikasi**: JWT Access Token (15 menit) + Refresh Token rotasi di database via Header `Authorization: Bearer`
-- **Object Storage**: S3-compatible (Cloudflare R2) via AWS SDK v3
+- **Object Storage**: Backblaze B2 S3-Compatible API via AWS SDK v3
 - **PDF Generation**: `pdfmake` murni (Template Opsi A Klasik, Kepala Laporan Biru)
 - **Validasi & Sanitasi**: Zod schemas
 - **Logging**: Winston logger terpusat & Morgan HTTP logger
@@ -29,13 +29,13 @@ src/
 │   ├── user/          # Manajemen akun anggota tim, reset kata sandi, soft nonaktif
 │   ├── project/       # Master project, zona waktu IANA, hari libur rutin
 │   ├── area/          # Master area per project & riwayat penugasan supervisor
-│   ├── upload/        # Presigned upload URL Cloudflare R2 & signed view URL
+│   ├── upload/        # Presigned upload URL object storage & signed view URL
 │   ├── report/        # Laporan harian, draf, submit, paraf otomatis, kunci bertahap, revisi Owner, & buka kunci area
 │   ├── dashboard/     # Ringkasan KPI proyek, status area per tanggal, & rekap keterlambatan supervisor
 │   └── pdf-export/    # Ekspor PDF Laporan Harian A4 Template Opsi A on-demand
 ├── helpers/           # Helper tanggal zona waktu (date.helper.ts) & response builder (response.helper.ts)
 ├── middlewares/       # AuthMiddleware (JWT + RBAC) & ErrorHandlerMiddleware
-├── utils/             # Adapter penyimpanan R2 (storage.adapter.ts) & katalog AppErrors (errors.ts)
+├── utils/             # Adapter penyimpanan S3-compatible (storage.adapter.ts) & katalog AppErrors (errors.ts)
 └── routes/            # Penggabungan router terpusat (/api/v1)
 ```
 
@@ -65,16 +65,18 @@ JWT_REFRESH_SECRET="ganti-dengan-secret-acak-minimal-32-karakter-refresh"
 JWT_ACCESS_EXPIRES_IN="15m"
 JWT_REFRESH_EXPIRES_DAYS=30
 
-# Cloudflare R2 (S3-Compatible Storage)
-STORAGE_PROVIDER="r2"
-STORAGE_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
-STORAGE_REGION="auto"
+# Backblaze B2 (S3-Compatible Storage)
+STORAGE_PROVIDER="b2"
+STORAGE_ENDPOINT="https://s3.<bucket-region>.backblazeb2.com"
+STORAGE_REGION="<bucket-region>"
 STORAGE_BUCKET="archistudio-reports"
-STORAGE_ACCESS_KEY_ID="isi-access-key-id"
-STORAGE_SECRET_ACCESS_KEY="isi-secret-access-key"
+STORAGE_ACCESS_KEY_ID="isi-application-key-id"
+STORAGE_SECRET_ACCESS_KEY="isi-application-key"
 STORAGE_UPLOAD_EXPIRES_SECONDS=300
 STORAGE_VIEW_EXPIRES_SECONDS=900
 ```
+
+Gunakan bucket private dan application key yang dibatasi ke bucket ini. Izin yang diperlukan adalah `readFiles`, `writeFiles`, dan `deleteFiles` (operasi hapus membutuhkan dua izin terakhir). `STORAGE_REGION` harus sama dengan region bucket; endpoint mengikuti format `https://s3.<region>.backblazeb2.com`. Untuk unggah langsung dari browser, tambahkan origin frontend pada CORS bucket dan izinkan metode `PUT` serta header `Content-Type`.
 
 ---
 
@@ -100,7 +102,7 @@ Seluruh modul telah dilindungi oleh **11 test suites (49 test cases)**:
 - `user-service.test.ts`: Proteksi RBAC akun, reset kata sandi, dan status nonaktif.
 - `project-service.test.ts`: Pembuatan proyek, zona waktu IANA, dan hari libur rutin.
 - `area-service.test.ts`: Pergantian supervisor ber-tanggal dan validasi 1 supervisor aktif.
-- `upload-and-lock.test.ts`: Presigned URL R2 dan kalkulasi kunci bertahap.
+- `upload-and-lock.test.ts`: Presigned URL storage dan kalkulasi kunci bertahap.
 - `daily-report-submission.test.ts`: Form laporan harian, cutoff 17:00, dan paraf otomatis.
 - `report-revision.test.ts`: Revisi Owner dengan audit snapshot JSON.
 - `dashboard-service.test.ts`: Kalkulasi ringkasan KPI dan rekap keterlambatan supervisor.

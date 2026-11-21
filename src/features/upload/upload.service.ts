@@ -60,7 +60,7 @@ function assertSupervisorAreaScope(
 }
 
 export class UploadService {
-  /** Menghasilkan daftar presigned PUT URL ke Cloudflare R2 setelah validasi BR-03/10/16. */
+  /** Menghasilkan daftar presigned PUT URL ke object storage setelah validasi BR-03/10/16. */
   static async signUploadUrls(
     body: SignUploadBody,
     user: AuthenticatedUser,
