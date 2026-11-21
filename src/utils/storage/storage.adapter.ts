@@ -43,6 +43,12 @@ const s3Client = new S3Client({
   region: resolveStorageRegion(storageEndpoint),
   endpoint: storageEndpoint,
   forcePathStyle: env.STORAGE_PROVIDER === "minio",
+  ...(env.STORAGE_PROVIDER === "b2"
+    ? {
+        requestChecksumCalculation: "WHEN_REQUIRED" as const,
+        responseChecksumValidation: "WHEN_REQUIRED" as const,
+      }
+    : {}),
   credentials: {
     accessKeyId: env.STORAGE_ACCESS_KEY_ID,
     secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
