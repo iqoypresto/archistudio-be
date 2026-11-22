@@ -28,6 +28,7 @@ import type {
   SubmitReportBody,
   UpdateDraftBody,
 } from "./report.type.js";
+import { ReportUploadSessionRepository } from "./report-upload-session.repository.js";
 
 export class ReportService {
   /** Mengambil daftar laporan harian berpaginasi sesuai cakupan role (BR-03). */
@@ -125,6 +126,20 @@ export class ReportService {
     }
     const reportDateStr = toIsoDateOnly(existing.reportDate);
     const assignment = assertAssignmentOnDate(existing.area.assignments, user.id, reportDateStr);
+    if (body.sessionId) {
+      const claimed = await ReportUploadSessionRepository.claimForFinalizing(body.sessionId, user.id, now);
+      const session = claimed ? await ReportUploadSessionRepository.findOwned(body.sessionId, user.id) : null;
+      if (!session || session.areaId !== existing.area.id || toIsoDateOnly(session.reportDate) !== reportDateStr) {
+        throw new ResponseError("AREA_SCOPE_FORBIDDEN");
+      }
+      const expectedPrefix = `projects/${existing.area.project.id}/areas/${existing.area.id}/${reportDateStr}/${user.id}/${body.sessionId}/`;
+      if ((body.photos ?? []).some((photo) => {
+        const sessionPhoto = session.photos.find((item) => item.storageKey === photo.storageKey);
+        return !sessionPhoto || (sessionPhoto.status === "PENDING" && !photo.storageKey.startsWith(expectedPrefix));
+      })) {
+        throw new ResponseError("INVALID_STORAGE_KEY");
+      }
+    }
     assertAreaDateUnlocked({
       project: existing.area.project,
       assignment,
@@ -147,6 +162,7 @@ export class ReportService {
       isLate: isPastCutoff(now, reportDateStr, existing.area.project.timezone, 17),
       signedByName: user.name,
       signedByTitle: user.jobTitle,
+      sessionId: body.sessionId,
     });
     return hydrateReportDetail(submitted);
   }

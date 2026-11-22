@@ -2,10 +2,14 @@ import { Role } from "@prisma/client";
 import { Router } from "express";
 import { AuthMiddleware } from "../../middlewares/auth.middleware.js";
 import { ReportController } from "./report.controller.js";
+import { authorizeUploadCleanup } from "../../middlewares/upload-cleanup.middleware.js";
 
 export const reportRouter = Router();
 
+reportRouter.post("/upload-sessions/cleanup", authorizeUploadCleanup, ReportController.cleanupUploadSessions);
 reportRouter.use(AuthMiddleware.authenticate);
+
+reportRouter.post("/upload-sessions", AuthMiddleware.authorizeRoles(Role.SUPERVISOR), ReportController.createUploadSession);
 
 reportRouter.get(
   "/archive",
@@ -32,15 +36,9 @@ reportRouter.get(
 );
 
 reportRouter.post(
-  "/draft",
+  "/submit",
   AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
-  ReportController.saveDraft,
-);
-
-reportRouter.put(
-  "/:id/draft",
-  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
-  ReportController.updateDraft,
+  ReportController.submitNew,
 );
 
 reportRouter.post(

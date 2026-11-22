@@ -16,6 +16,8 @@ import type {
   PurposeUploadBody,
   SignedPurposeUploadItem,
 } from "./upload.type.js";
+import { ReportUploadSessionRepository } from "../report/report-upload-session.repository.js";
+import { ReportUploadSessionService } from "../report/report-upload-session.service.js";
 
 const MIN_PHOTOS = 1;
 const MAX_PHOTOS = 10;
@@ -81,16 +83,23 @@ export class UploadService {
       throw new ResponseError("RESOURCE_NOT_FOUND");
     }
     if (user.role === Role.SUPERVISOR) {
+      if (!body.sessionId) throw new ResponseError("VALIDATION_ERROR", "Sesi upload wajib diisi.");
       assertSupervisorAreaScope(area.assignments, user.id, body.reportDate);
+      await ReportUploadSessionService.assertCanSign(body as typeof body & { sessionId: string }, user);
     }
     return Promise.all(
-      body.files.map((file) => {
+      body.files.map(async (file) => {
         const storageKey = buildReportPhotoStorageKey({
           projectId: area.project.id,
           areaId: area.id,
           reportDate: body.reportDate,
           contentType: file.contentType,
+          supervisorId: user.role === Role.SUPERVISOR ? user.id : undefined,
+          uploadSessionId: user.role === Role.SUPERVISOR ? body.sessionId : undefined,
         });
+        if (user.role === Role.SUPERVISOR && body.sessionId) {
+          await ReportUploadSessionRepository.addPhoto(body.sessionId, storageKey);
+        }
         return createSignedUploadUrl({ storageKey, contentType: file.contentType });
       }),
     );

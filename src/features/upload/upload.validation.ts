@@ -9,6 +9,7 @@ export class UploadValidation {
     sign: z.union([
       z.object({
         areaId: z.string().uuid("ID area tidak valid."),
+        sessionId: z.string().uuid().optional(),
         reportDate: z
           .string()
           .regex(DATE_YYYY_MM_DD, "Format tanggal laporan harus YYYY-MM-DD."),

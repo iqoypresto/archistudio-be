@@ -60,6 +60,8 @@ export interface BuildPhotoKeyParams {
   areaId: string;
   reportDate: string;
   contentType: string;
+  supervisorId?: string;
+  uploadSessionId?: string;
 }
 
 /** Membangun storageKey terstruktur per project, area, dan tanggal bisnis. */
@@ -72,7 +74,8 @@ export function buildReportPhotoStorageKey(params: BuildPhotoKeyParams): string 
     throw new ResponseError("UNSUPPORTED_FILE_TYPE");
   }
   const fileId = crypto.randomUUID();
-  return `projects/${params.projectId}/areas/${params.areaId}/${params.reportDate}/${fileId}.${ext}`;
+  const ownerPath = params.supervisorId ? `${params.supervisorId}/${params.uploadSessionId ? `${params.uploadSessionId}/` : ""}` : "";
+  return `projects/${params.projectId}/areas/${params.areaId}/${params.reportDate}/${ownerPath}${fileId}.${ext}`;
 }
 
 export type PurposeUpload = "payment-proof" | "drawing" | "project-document" | "comms-attachment";

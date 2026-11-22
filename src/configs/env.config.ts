@@ -31,6 +31,7 @@ const envSchema = z.object({
   STORAGE_SECRET_ACCESS_KEY: z.string().default("test-secret-key"),
   STORAGE_UPLOAD_EXPIRES_SECONDS: z.coerce.number().int().positive().default(300),
   STORAGE_VIEW_EXPIRES_SECONDS: z.coerce.number().int().positive().default(900),
+  UPLOAD_CLEANUP_TOKEN: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

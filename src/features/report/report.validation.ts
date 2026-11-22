@@ -58,6 +58,13 @@ export class ReportValidation {
   };
 
   static readonly BODY = {
+    submitNew: draftContentSchema.extend({
+      sessionId: z.string().uuid(),
+      areaId: z.string().uuid(),
+      reportDate: z.iso.date(),
+      reportType: z.nativeEnum(ReportType),
+      photos: z.array(photoInputSchema).min(1).max(10),
+    }),
     saveDraft: draftContentSchema.extend({
       areaId: z.string().uuid("ID area tidak valid."),
       reportDate: z
@@ -66,7 +73,7 @@ export class ReportValidation {
       reportType: z.nativeEnum(ReportType).default(ReportType.WORK),
     }),
     updateDraft: draftContentSchema,
-    submit: draftContentSchema,
+    submit: draftContentSchema.extend({ sessionId: z.string().uuid().optional() }),
     revise: draftContentSchema.extend({
       changeSummary: z
         .string()

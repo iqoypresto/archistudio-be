@@ -109,7 +109,7 @@ export function buildReportsWhere(
         user.role === Role.SUPERVISOR ? { some: { supervisorId: user.id } } : undefined,
     },
     areaId: query.areaId,
-    supervisorId: query.supervisorId,
+    supervisorId: user.role === Role.SUPERVISOR ? user.id : query.supervisorId,
     status: query.status,
     reportType: query.reportType,
     isLate: query.isLate,
