@@ -28,7 +28,6 @@ enum ReportType {
   NO_WORK
 }
 enum ReportStatus {
-  DRAFT
   SUBMITTED
 }
 
@@ -175,7 +174,7 @@ model DailyReport {
   supervisorId     String           @map("supervisor_id")
   reportDate       DateTime         @map("report_date") @db.Date /// Tanggal bisnis zona project, Lihat BR-14
   reportType       ReportType       @default(WORK) @map("report_type")
-  status           ReportStatus     @default(DRAFT)
+  status           ReportStatus     @default(SUBMITTED)
   progressText     String?          @map("progress_text")
   obstaclesText    String?          @map("obstacles_text")
   tomorrowPlanText String?          @map("tomorrow_plan_text")

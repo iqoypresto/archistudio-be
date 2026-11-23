@@ -1,4 +1,3 @@
-import { ReportStatus } from "@prisma/client";
 import { isRestDay, toBusinessDateString } from "../../helpers/date.helper.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { evaluateAreaLock } from "./report-lock.helper.js";
@@ -12,33 +11,9 @@ function toDateStr(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Mencari draf aktif milik supervisor pada tanggal wajib berikutnya atau hari ini. */
-function resolveDraftReport(
-  reports: ActiveAssignmentRecord["area"]["reports"],
-  supervisorId: string,
-  nextRequiredDate: string | null,
-  todayDate: string,
-): { draftReportId: string | null; draftReportDate: string | null } {
-  const drafts = reports.filter(
-    (r) => r.status === ReportStatus.DRAFT && r.supervisorId === supervisorId,
-  );
-  const targetDate = nextRequiredDate ?? todayDate;
-  const matched =
-    drafts.find((r) => toDateStr(r.reportDate) === targetDate) ??
-    drafts.find((r) => toDateStr(r.reportDate) === todayDate);
-  if (!matched) {
-    return { draftReportId: null, draftReportDate: null };
-  }
-  return {
-    draftReportId: matched.id,
-    draftReportDate: toDateStr(matched.reportDate),
-  };
-}
-
 /** Memetakan satu record penugasan menjadi status kewajiban lapor terhitung. */
 function mapAssignmentToAreaTaskStatus(
   record: ActiveAssignmentRecord,
-  supervisorId: string,
   now: Date,
 ): SupervisorAreaTaskStatus {
   const { area } = record;
@@ -55,7 +30,6 @@ function mapAssignmentToAreaTaskStatus(
     reports: area.reports,
     unlockedThroughDate: latestUnlock?.unlockedThroughDate ?? null,
   });
-  const draft = resolveDraftReport(area.reports, supervisorId, lockState.nextRequiredDate, todayDate);
   return {
     areaId: area.id,
     areaCode: area.code,
@@ -78,8 +52,6 @@ function mapAssignmentToAreaTaskStatus(
     overdueBusinessDaysCount: lockState.overdueBusinessDaysCount,
     isOverdueMoreThan3Days: lockState.isOverdueMoreThan3Days,
     oldestOverdueDate: lockState.oldestOverdueDate,
-    draftReportId: draft.draftReportId,
-    draftReportDate: draft.draftReportDate,
   };
 }
 
@@ -91,9 +63,7 @@ export class ReportLockService {
   ): Promise<SupervisorAreaTaskStatus[]> {
     const assignments =
       await ReportLockRepository.findActiveAssignmentsForSupervisor(supervisorId);
-    return assignments.map((record) =>
-      mapAssignmentToAreaTaskStatus(record, supervisorId, now),
-    );
+    return assignments.map((record) => mapAssignmentToAreaTaskStatus(record, now));
   }
 
   /** Memastikan tidak ada tanggal wajib lapor lebih lama yang mengunci tanggal target (BR-20). */

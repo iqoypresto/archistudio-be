@@ -1,4 +1,4 @@
-import { Prisma, Role } from "@prisma/client";
+import { Prisma, ReportStatus, Role } from "@prisma/client";
 import {
   computeAreaLockState,
   parseDateOnlyUtc,
@@ -9,11 +9,12 @@ import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { createSignedViewUrlsMap } from "../../utils/storage/storage.adapter.js";
 import { ReportLockService } from "./report-lock.service.js";
 import { mapReportDetail, toIsoDateOnly } from "./report.helper.js";
-import type { DraftMutationData, ReportDetailRecord } from "./report.prisma.js";
+import type { ReportMutationData, ReportDetailRecord } from "./report.prisma.js";
 import type {
   DailyReportDetail,
   ListReportsQuery,
-  UpdateDraftBody,
+  ReviseReportBody,
+  SubmitNewBody,
 } from "./report.type.js";
 
 /** Memastikan supervisor bertugas pada area dan tanggal target (BR-03, BR-10). */
@@ -83,7 +84,7 @@ export function assertAreaDateUnlocked(params: {
   });
 }
 
-export function extractMutationFields(body: UpdateDraftBody): DraftMutationData {
+export function extractMutationFields(body: SubmitNewBody | ReviseReportBody): ReportMutationData {
   return {
     reportType: body.reportType,
     progressText: body.progressText,
@@ -110,7 +111,7 @@ export function buildReportsWhere(
     },
     areaId: query.areaId,
     supervisorId: user.role === Role.SUPERVISOR ? user.id : query.supervisorId,
-    status: query.status,
+    status: ReportStatus.SUBMITTED,
     reportType: query.reportType,
     isLate: query.isLate,
   };
@@ -153,7 +154,7 @@ export function assertCanReadReport(
 
 export function buildMergedCompletenessInput(
   existing: ReportDetailRecord,
-  body: UpdateDraftBody,
+  body: ReviseReportBody,
 ) {
   return {
     reportType: body.reportType ?? existing.reportType,

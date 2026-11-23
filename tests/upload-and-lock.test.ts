@@ -172,21 +172,19 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
           },
           reports: [
             { id: "rep-1", reportDate: new Date("2026-11-12T00:00:00.000Z"), status: ReportStatus.SUBMITTED, supervisorId: "sup-1" },
-            { id: "rep-draft", reportDate: new Date("2026-11-13T00:00:00.000Z"), status: ReportStatus.DRAFT, supervisorId: "sup-1" },
           ],
           unlocks: [],
         },
       },
     ]);
     const res = await invokeApp<
-      ApiEnvelope<Array<{ pendingDates: string[]; nextRequiredDate: string; isTodayLocked: boolean; draftReportId: string }>>
+      ApiEnvelope<Array<{ pendingDates: string[]; nextRequiredDate: string; isTodayLocked: boolean }>>
     >(app, { method: "GET", path: "/api/v1/reports/my-areas-status", headers: supHeader("sup-1") });
     expect(res.status).toBe(200);
     const areaStatus = res.body.data?.[0];
     expect(areaStatus?.pendingDates).toEqual(["2026-11-13", "2026-11-14", "2026-11-16"]);
     expect(areaStatus?.nextRequiredDate).toBe("2026-11-13");
     expect(areaStatus?.isTodayLocked).toBe(true);
-    expect(areaStatus?.draftReportId).toBe("rep-draft");
     expect(() =>
       ReportLockService.assertDateUnlocked(areaStatus?.pendingDates ?? [], "2026-11-16"),
     ).toThrowError(ResponseError);

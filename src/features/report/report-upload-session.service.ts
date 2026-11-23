@@ -3,35 +3,24 @@ import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { ReportUploadSessionRepository } from "./report-upload-session.repository.js";
 import { ReportRepository } from "./report.repository.js";
-import { ReportStatus } from "@prisma/client";
 import { assertAssignmentOnDate } from "./report.guard.js";
 
 const SESSION_HOURS = 24;
 const CLEANUP_BATCH = 25;
 
 export class ReportUploadSessionService {
-  static create(input: { areaId: string; reportDate: string; reportId?: string }, user: AuthenticatedUser) {
+  static create(input: { areaId: string; reportDate: string }, user: AuthenticatedUser) {
     return ReportUploadSessionService.createForAssignedArea(input, user);
   }
 
-  private static async createForAssignedArea(input: { areaId: string; reportDate: string; reportId?: string }, user: AuthenticatedUser) {
-    const area = await ReportRepository.findAreaContextForDraft(input.areaId);
+  private static async createForAssignedArea(input: { areaId: string; reportDate: string }, user: AuthenticatedUser) {
+    const area = await ReportRepository.findAreaContextForSubmit(input.areaId);
     if (!area) throw new ResponseError("RESOURCE_NOT_FOUND");
     assertAssignmentOnDate(area.assignments, user.id, input.reportDate);
-    let attachedStorageKeys: string[] = [];
-    if (input.reportId) {
-      const report = await ReportRepository.findReportDetailById(input.reportId);
-      if (!report || report.supervisorId !== user.id || report.areaId !== input.areaId ||
-        report.status !== ReportStatus.DRAFT || report.reportDate.toISOString().slice(0, 10) !== input.reportDate) {
-        throw new ResponseError("AREA_SCOPE_FORBIDDEN");
-      }
-      attachedStorageKeys = report.photos.map((photo) => photo.storageKey);
-    }
     return ReportUploadSessionRepository.create({
       supervisorId: user.id, areaId: input.areaId,
       reportDate: new Date(`${input.reportDate}T00:00:00.000Z`),
       expiresAt: new Date(Date.now() + SESSION_HOURS * 60 * 60 * 1000),
-      attachedStorageKeys,
     });
   }
 

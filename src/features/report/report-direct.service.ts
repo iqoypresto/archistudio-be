@@ -12,7 +12,7 @@ import { ReportUploadSessionRepository } from "./report-upload-session.repositor
 
 export class ReportDirectService {
   static async submit(body: SubmitNewBody, user: AuthenticatedUser) {
-    const area = await ReportRepository.findAreaContextForDraft(body.areaId);
+    const area = await ReportRepository.findAreaContextForSubmit(body.areaId);
     if (!area) throw new ResponseError("RESOURCE_NOT_FOUND");
     const existing = area.reports.find((report) => toIsoDateOnly(report.reportDate) === body.reportDate);
     if (existing?.status === ReportStatus.SUBMITTED && existing.supervisorId === user.id) {

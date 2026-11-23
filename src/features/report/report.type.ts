@@ -4,10 +4,7 @@ import type { ReportValidation } from "./report.validation.js";
 
 export type ListReportsQuery = z.infer<typeof ReportValidation.QUERY.list>;
 export type ListArchivedReportsQuery = z.infer<typeof ReportValidation.QUERY.archive>;
-export type SaveDraftBody = z.infer<typeof ReportValidation.BODY.saveDraft>;
 export type SubmitNewBody = z.infer<typeof ReportValidation.BODY.submitNew>;
-export type UpdateDraftBody = z.infer<typeof ReportValidation.BODY.updateDraft>;
-export type SubmitReportBody = z.infer<typeof ReportValidation.BODY.submit>;
 export type ReviseReportBody = z.infer<typeof ReportValidation.BODY.revise>;
 
 export interface ReportSnapshotJson {

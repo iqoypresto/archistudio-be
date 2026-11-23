@@ -50,13 +50,13 @@ describe("BR-25 — kondisi atomik dan pembaca data historis", () => {
     }));
   });
 
-  it("detail/foto, kewajiban draft, rekap, dan PDF tidak menyembunyikan arsip", async () => {
+  it("detail/foto, kewajiban laporan, rekap, dan PDF tidak menyembunyikan arsip", async () => {
     await ReportRepository.findReportDetailById("historical");
     await UploadRepository.findReportWithPhotosAndScope("historical");
     for (const [args] of vi.mocked(prisma.dailyReport.findFirst).mock.calls) {
       expect(args?.where).not.toHaveProperty("archivedAt");
     }
-    await ReportRepository.findAreaContextForDraft("area-a");
+    await ReportRepository.findAreaContextForSubmit("area-a");
     const context = vi.mocked(prisma.area.findFirst).mock.calls[0]?.[0];
     expect(context?.select?.reports).not.toHaveProperty("where.archivedAt");
     expect(REPORT_DETAIL_INCLUDE.area.select.reports.where).toEqual({ status: "SUBMITTED" });

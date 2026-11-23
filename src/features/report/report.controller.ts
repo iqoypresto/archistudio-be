@@ -48,14 +48,6 @@ export class ReportController {
     ResponseHelper.ok(res, COMMON_MESSAGES.FETCHED, result);
   }
 
-  /** Menyimpan draf laporan harian baru atau memperbarui draf pada tanggal yang sama (US-08, US-09). */
-  static async saveDraft(req: Request, res: Response): Promise<void> {
-    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
-    const body = validate(ReportValidation.BODY.saveDraft, req.body);
-    const result = await ReportService.saveDraft(body, req.user);
-    ResponseHelper.created(res, COMMON_MESSAGES.CREATED, result);
-  }
-
   /** Membuat laporan langsung terkirim setelah foto diunggah oleh Supervisor. */
   static async submitNew(req: Request, res: Response): Promise<void> {
     if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
@@ -74,24 +66,6 @@ export class ReportController {
   static async cleanupUploadSessions(_req: Request, res: Response): Promise<void> {
     const result = await ReportUploadSessionService.cleanupExpired();
     ResponseHelper.ok(res, COMMON_MESSAGES.UPDATED, result);
-  }
-
-  /** Memperbarui isi draf laporan harian sebelum dikirim (BR-17). */
-  static async updateDraft(req: Request, res: Response): Promise<void> {
-    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
-    const { id } = validate(ReportValidation.PARAMS.id, req.params);
-    const body = validate(ReportValidation.BODY.updateDraft, req.body);
-    const result = await ReportService.updateDraft(id, body, req.user);
-    ResponseHelper.ok(res, COMMON_MESSAGES.UPDATED, result);
-  }
-
-  /** Mengirim laporan harian dengan validasi lengkap, paraf otomatis, & cutoff 17:00 (BR-18, BR-26). */
-  static async submitReport(req: Request, res: Response): Promise<void> {
-    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
-    const { id } = validate(ReportValidation.PARAMS.id, req.params);
-    const body = validate(ReportValidation.BODY.submit, req.body);
-    const result = await ReportService.submitReport(id, body, req.user);
-    ResponseHelper.ok(res, "Laporan harian berhasil dikirim.", result);
   }
 
   /** Merevisi isi laporan terkirim khusus OWNER + mencatat riwayat snapshot (US-14, BR-24). */

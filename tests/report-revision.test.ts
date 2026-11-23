@@ -52,7 +52,7 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
     }
   });
 
-  it("menolak revisi jika changeSummary < 3 karakter atau status masih DRAFT", async () => {
+  it("menolak revisi jika changeSummary kurang dari 3 karakter", async () => {
     const badValidation = await invokeApp<ApiEnvelope>(app, {
       method: "PATCH",
       path: `/api/v1/reports/${TEST_REPORT_ID}/revise`,
@@ -62,16 +62,6 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
     expect(badValidation.status).toBe(422);
     expect(badValidation.body.error?.code).toBe("VALIDATION_ERROR");
 
-    vi.spyOn(ReportRepository, "findReportDetailById").mockResolvedValue(
-      makeReportRecord({ status: ReportStatus.DRAFT }),
-    );
-    const draftRes = await invokeApp<ApiEnvelope>(app, {
-      method: "PATCH",
-      path: `/api/v1/reports/${TEST_REPORT_ID}/revise`,
-      headers: authHeaderFor(Role.OWNER),
-      body: { changeSummary: "Koreksi jumlah pekerja" },
-    });
-    expect(draftRes.status).toBe(422);
   });
 
   it("mengizinkan OWNER merevisi laporan SUBMITTED & menyimpan previousSnapshotJson utuh (AC-14.1, ADR-05)", async () => {

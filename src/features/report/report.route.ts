@@ -41,12 +41,6 @@ reportRouter.post(
   ReportController.submitNew,
 );
 
-reportRouter.post(
-  "/:id/submit",
-  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
-  ReportController.submitReport,
-);
-
 reportRouter.patch(
   "/:id/revise",
   AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),

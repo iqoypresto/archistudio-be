@@ -26,7 +26,7 @@ export function makeReportRecord(overrides?: {
   submittedDates?: Date[];
   photosCount?: number;
 }) {
-  const status = overrides?.status ?? ReportStatus.DRAFT;
+  const status = overrides?.status ?? ReportStatus.SUBMITTED;
   const photos = Array.from({ length: overrides?.photosCount ?? 1 }).map((_, i) => ({
     id: `photo-${i}`,
     reportId: TEST_REPORT_ID,

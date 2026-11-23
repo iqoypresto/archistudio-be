@@ -1,15 +1,11 @@
 import { UploadSessionPhotoStatus, UploadSessionStatus } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
+import { buildPhotoCreateRows, REPORT_DETAIL_INCLUDE, type ReportMutationData } from "./report.prisma.js";
+import type { ReportPhotoInput } from "./report.type.js";
 
 export class ReportUploadSessionRepository {
-  static create(input: { supervisorId: string; areaId: string; reportDate: Date; expiresAt: Date; attachedStorageKeys?: string[] }) {
-    const { attachedStorageKeys = [], ...data } = input;
-    return prisma.reportUploadSession.create({ data: {
-      ...data,
-      photos: attachedStorageKeys.length ? { create: attachedStorageKeys.map((storageKey) => ({
-        storageKey, status: UploadSessionPhotoStatus.ATTACHED,
-      })) } : undefined,
-    } });
+  static create(input: { supervisorId: string; areaId: string; reportDate: Date; expiresAt: Date }) {
+    return prisma.reportUploadSession.create({ data: input });
   }
 
   static findForSign(id: string, supervisorId: string, areaId: string, reportDate: Date) {
@@ -48,7 +44,7 @@ export class ReportUploadSessionRepository {
   static async finalizeAndCreateReport(input: {
     sessionId: string; report: {
       reportNumber: string; areaId: string; supervisorId: string; reportDate: Date;
-      data: import("./report.prisma.js").DraftMutationData; photos: import("./report.type.js").ReportPhotoInput[];
+      data: ReportMutationData; photos: ReportPhotoInput[];
       submittedAt: Date; archivedAt: Date | null; isLate: boolean; signedByName: string; signedByTitle: string;
     };
   }) {
@@ -86,7 +82,7 @@ export class ReportUploadSessionRepository {
       ] },
       take: limit, orderBy: { expiresAt: "asc" }, include: { photos: { where: { status: UploadSessionPhotoStatus.PENDING } } },
     });
-    const results: { sessionId: string; photoIds: string[]; keys: string[] }[] = [];
+    const results: { sessionId: string; sessionStatus: UploadSessionStatus; photoIds: string[]; keys: string[] }[] = [];
     for (const session of candidates) {
       if (session.status !== UploadSessionStatus.COMMITTED && session.status !== UploadSessionStatus.CLEANUP_PENDING) {
         const claimed = await prisma.reportUploadSession.updateMany({

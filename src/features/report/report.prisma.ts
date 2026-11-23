@@ -64,7 +64,7 @@ export const REPORT_DETAIL_INCLUDE = Prisma.validator<Prisma.DailyReportInclude>
   },
 });
 
-export interface DraftMutationData {
+export interface ReportMutationData {
   reportType?: ReportType;
   progressText?: string | null;
   obstaclesText?: string | null;

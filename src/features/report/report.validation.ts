@@ -1,4 +1,4 @@
-import { ReportStatus, ReportType, WeatherType } from "@prisma/client";
+import { ReportType, WeatherType } from "@prisma/client";
 import { z } from "zod";
 import { paginationQuerySchema } from "../../validations/pagination.validation.js";
 
@@ -11,7 +11,7 @@ const photoInputSchema = z.object({
   takenAt: z.string().trim().max(40).nullable().optional(),
 });
 
-const draftContentSchema = z.object({
+const reportContentSchema = z.object({
   reportType: z.nativeEnum(ReportType).optional(),
   progressText: z.string().trim().nullable().optional(),
   obstaclesText: z.string().trim().nullable().optional(),
@@ -47,7 +47,6 @@ export class ReportValidation {
       reportDate: z.string().regex(DATE_YYYY_MM_DD).optional(),
       dateFrom: z.string().regex(DATE_YYYY_MM_DD).optional(),
       dateTo: z.string().regex(DATE_YYYY_MM_DD).optional(),
-      status: z.nativeEnum(ReportStatus).optional(),
       reportType: z.nativeEnum(ReportType).optional(),
       isLate: z
         .enum(["true", "false"])
@@ -58,23 +57,14 @@ export class ReportValidation {
   };
 
   static readonly BODY = {
-    submitNew: draftContentSchema.extend({
+    submitNew: reportContentSchema.extend({
       sessionId: z.string().uuid(),
       areaId: z.string().uuid(),
       reportDate: z.iso.date(),
       reportType: z.nativeEnum(ReportType),
       photos: z.array(photoInputSchema).min(1).max(10),
     }),
-    saveDraft: draftContentSchema.extend({
-      areaId: z.string().uuid("ID area tidak valid."),
-      reportDate: z
-        .string()
-        .regex(DATE_YYYY_MM_DD, "Format tanggal laporan harus YYYY-MM-DD."),
-      reportType: z.nativeEnum(ReportType).default(ReportType.WORK),
-    }),
-    updateDraft: draftContentSchema,
-    submit: draftContentSchema.extend({ sessionId: z.string().uuid().optional() }),
-    revise: draftContentSchema.extend({
+    revise: reportContentSchema.extend({
       changeSummary: z
         .string()
         .trim()
