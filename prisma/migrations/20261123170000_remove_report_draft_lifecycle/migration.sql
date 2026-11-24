@@ -7,6 +7,8 @@ BEGIN
   END IF;
 END $$;
 
+-- Rebuild the partial index because its predicate is bound to the old enum type.
+DROP INDEX "idx_daily_reports_archive_due";
 ALTER TABLE "daily_reports" ALTER COLUMN "status" DROP DEFAULT;
 ALTER TYPE "ReportStatus" RENAME TO "ReportStatus_legacy";
 CREATE TYPE "ReportStatus" AS ENUM ('SUBMITTED');
@@ -16,3 +18,6 @@ ALTER TABLE "daily_reports"
 ALTER TABLE "daily_reports"
   ALTER COLUMN "status" SET DEFAULT 'SUBMITTED'::"ReportStatus";
 DROP TYPE "ReportStatus_legacy";
+CREATE INDEX "idx_daily_reports_archive_due"
+  ON "daily_reports" ("report_date", "status")
+  WHERE "status" = 'SUBMITTED' AND "archived_at" IS NULL;
