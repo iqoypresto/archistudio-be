@@ -52,6 +52,12 @@ export class ProjectValidation {
         routineHolidays: z
           .array(z.number().int().min(0, "Hari libur 0-6.").max(6, "Hari libur 0-6."))
           .default([0]),
+        siteManagerId: z
+          .string()
+          .uuid("ID Site Manager tidak valid.")
+          .nullable()
+          .optional()
+          .or(z.literal("").transform(() => null)),
       })
       .refine((data) => !data.endDate || data.endDate >= data.startDate, {
         message: "Tanggal selesai project tidak boleh lebih awal dari tanggal mulai.",
@@ -80,6 +86,12 @@ export class ProjectValidation {
         status: activeProjectStatusSchema.optional(),
         timezone: z.string().trim().min(1).optional(),
         routineHolidays: z.array(z.number().int().min(0).max(6)).optional(),
+        siteManagerId: z
+          .string()
+          .uuid("ID Site Manager tidak valid.")
+          .nullable()
+          .optional()
+          .or(z.literal("").transform(() => null)),
       })
       .refine((data) => Object.keys(data).length > 0, "Setidaknya satu data harus disertakan.")
       .refine(

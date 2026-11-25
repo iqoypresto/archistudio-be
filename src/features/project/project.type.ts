@@ -10,6 +10,12 @@ export type RestoreProjectDTO = z.infer<typeof ProjectValidation.BODY.restore>;
 
 export type ArchiveType = "COMPLETED" | "MANUAL";
 
+export interface ProjectSiteManagerSummary {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 export interface ProjectListItem {
   id: string;
   code: string;
@@ -21,6 +27,8 @@ export interface ProjectListItem {
   status: ProjectStatus;
   timezone: string;
   routineHolidays: number[];
+  siteManagerId?: string | null;
+  siteManager?: ProjectSiteManagerSummary | null;
   completedAt?: Date | null;
   archivedAt?: Date | null;
   createdAt: Date;

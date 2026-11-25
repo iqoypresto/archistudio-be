@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.js";
 import { ReportLockRepository } from "../src/features/report/report-lock.repository.js";
 import { ReportLockService } from "../src/features/report/report-lock.service.js";
+import { ReportUploadSessionRepository } from "../src/features/report/report-upload-session.repository.js";
+import { ReportUploadSessionService } from "../src/features/report/report-upload-session.service.js";
 import { UploadRepository } from "../src/features/upload/upload.repository.js";
 import { signAccessToken } from "../src/utils/auth/jwt.util.js";
 import { ResponseError } from "../src/utils/errors/response-error.util.js";
@@ -20,6 +22,7 @@ interface ApiEnvelope<T = Record<string, unknown>> {
 const AREA_ID = "11111111-1111-4111-8111-111111111111";
 const PROJECT_ID = "22222222-2222-4222-8222-222222222222";
 const REPORT_ID = "33333333-3333-4333-8333-333333333333";
+const SESSION_ID = "44444444-4444-4444-8444-444444444444";
 
 function supHeader(sub = "sup-1") {
   const token = signAccessToken({
@@ -62,6 +65,7 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       headers: supHeader("sup-1"),
       body: {
         areaId: AREA_ID,
+        sessionId: SESSION_ID,
         reportDate: "2026-11-16",
         files: [{ contentType: "image/jpeg", fileSizeBytes: 250_000 }],
       },
@@ -74,7 +78,10 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       areaId: AREA_ID,
       supervisorId: "sup-lain",
       photos: [],
-      area: { assignments: [{ supervisorId: "sup-lain" }] },
+      area: {
+        project: { siteManagerId: null },
+        assignments: [{ supervisorId: "sup-lain" }],
+      },
     });
     const viewRes = await invokeApp<ApiEnvelope>(app, {
       method: "POST",
@@ -94,6 +101,7 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       headers: supHeader("sup-1"),
       body: {
         areaId: AREA_ID,
+        sessionId: SESSION_ID,
         reportDate: "2026-11-10",
         files: [{ contentType: "image/jpeg", fileSizeBytes: 200_000 }],
       },
@@ -107,18 +115,21 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       method: "POST",
       path: "/api/v1/uploads/sign",
       headers: supHeader("sup-1"),
-      body: { areaId: AREA_ID, reportDate: "2026-11-16", files: [] },
+      body: { areaId: AREA_ID, sessionId: SESSION_ID, reportDate: "2026-11-16", files: [] },
     });
     expect(emptyRes.status).toBe(400);
     expect(emptyRes.body.error?.code).toBe("INVALID_PHOTO_COUNT");
 
     mockArea("sup-1");
+    vi.spyOn(ReportUploadSessionService, "assertCanSign").mockResolvedValue({ id: SESSION_ID } as never);
+    vi.spyOn(ReportUploadSessionRepository, "addPhoto").mockResolvedValue({} as never);
     const badMimeRes = await invokeApp<ApiEnvelope>(app, {
       method: "POST",
       path: "/api/v1/uploads/sign",
       headers: supHeader("sup-1"),
       body: {
         areaId: AREA_ID,
+        sessionId: SESSION_ID,
         reportDate: "2026-11-16",
         files: [{ contentType: "application/pdf", fileSizeBytes: 120_000 }],
       },
@@ -139,6 +150,7 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       headers: supHeader("sup-1"),
       body: {
         areaId: AREA_ID,
+        sessionId: SESSION_ID,
         reportDate: "2026-11-16",
         files: [{ contentType: "image/webp", fileSizeBytes: 180_000 }],
       },

@@ -1,4 +1,4 @@
-import { DrawingDirection, Prisma, ProjectStatus } from "@prisma/client";
+import { Prisma, ProjectStatus } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import type { CreateDrawingDTO, DrawingItem } from "./drawing.type.js";
@@ -15,7 +15,6 @@ export const DRAWING_MESSAGES = {
 export const drawingSelect = Prisma.validator<Prisma.DrawingSelect>()({
   id: true,
   projectId: true,
-  direction: true,
   storageKey: true,
   fileName: true,
   mimeType: true,
@@ -74,7 +73,7 @@ export function assertValidDrawingFile(projectId: string, dto: CreateDrawingDTO)
       "Ukuran Drawing setelah kompresi maksimal 4 MB. Pilih gambar lain (BR-33).",
     );
   }
-  const expectedPrefix = `projects/${projectId}/drawings/${dto.direction}/`;
+  const expectedPrefix = `projects/${projectId}/drawings/`;
   if (!dto.storageKey.startsWith(expectedPrefix) || dto.storageKey.includes("..")) {
     throw new ResponseError("INVALID_STORAGE_KEY", "Referensi file Drawing tidak valid.");
   }
@@ -84,7 +83,6 @@ export function formatDrawingItem(raw: RawDrawingRecord, viewUrl: string): Drawi
   return {
     id: raw.id,
     projectId: raw.projectId,
-    direction: raw.direction as DrawingDirection,
     storageKey: raw.storageKey,
     fileName: raw.fileName,
     mimeType: raw.mimeType,

@@ -101,14 +101,35 @@ export function buildReportsWhere(
   query: ListReportsQuery,
   user: AuthenticatedUser,
 ): Prisma.DailyReportWhereInput {
+  const andConditions: Prisma.DailyReportWhereInput[] = [];
+  const baseAreaFilter: Prisma.AreaWhereInput = {
+    deletedAt: null,
+    projectId: query.projectId,
+    project: { deletedAt: null },
+  };
+
+  if (user.role === Role.SUPERVISOR) {
+    baseAreaFilter.assignments = { some: { supervisorId: user.id } };
+  } else if (user.role === Role.SITE_MANAGER) {
+    if (query.scope === "own") {
+      andConditions.push({ supervisorId: user.id });
+    } else if (query.scope === "team") {
+      andConditions.push({
+        area: { project: { siteManagerId: user.id } },
+        supervisorId: { not: user.id },
+      });
+    } else {
+      andConditions.push({
+        OR: [
+          { supervisorId: user.id },
+          { area: { project: { siteManagerId: user.id } } },
+        ],
+      });
+    }
+  }
+
   const where: Prisma.DailyReportWhereInput = {
-    area: {
-      deletedAt: null,
-      projectId: query.projectId,
-      project: { deletedAt: null },
-      assignments:
-        user.role === Role.SUPERVISOR ? { some: { supervisorId: user.id } } : undefined,
-    },
+    area: baseAreaFilter,
     areaId: query.areaId,
     supervisorId: user.role === Role.SUPERVISOR ? user.id : query.supervisorId,
     status: ReportStatus.SUBMITTED,
@@ -124,11 +145,16 @@ export function buildReportsWhere(
     };
   }
   if (query.search) {
-    where.OR = [
-      { reportNumber: { contains: query.search, mode: "insensitive" } },
-      { progressText: { contains: query.search, mode: "insensitive" } },
-      { noWorkReason: { contains: query.search, mode: "insensitive" } },
-    ];
+    andConditions.push({
+      OR: [
+        { reportNumber: { contains: query.search, mode: "insensitive" } },
+        { progressText: { contains: query.search, mode: "insensitive" } },
+        { noWorkReason: { contains: query.search, mode: "insensitive" } },
+      ],
+    });
+  }
+  if (andConditions.length > 0) {
+    where.AND = andConditions;
   }
   return where;
 }
@@ -145,11 +171,18 @@ export function assertCanReadReport(
   record: ReportDetailRecord,
   user: AuthenticatedUser,
 ): void {
-  if (user.role !== Role.SUPERVISOR) return;
-  const allowed =
+  if (user.role === Role.OWNER || user.role === Role.ADMIN) return;
+  const isOwnOrAssignedArea =
     record.supervisorId === user.id ||
     record.area.assignments.some((a) => a.supervisorId === user.id);
-  if (!allowed) throw new ResponseError("AREA_SCOPE_FORBIDDEN");
+  if (user.role === Role.SITE_MANAGER) {
+    const isManagedProject = record.area.project.siteManagerId === user.id;
+    if (!isOwnOrAssignedArea && !isManagedProject) {
+      throw new ResponseError("AREA_SCOPE_FORBIDDEN");
+    }
+    return;
+  }
+  if (!isOwnOrAssignedArea) throw new ResponseError("AREA_SCOPE_FORBIDDEN");
 }
 
 export function buildMergedCompletenessInput(

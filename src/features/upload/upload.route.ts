@@ -9,12 +9,12 @@ uploadRouter.use(AuthMiddleware.authenticate);
 
 uploadRouter.post(
   "/sign",
-  AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.OWNER),
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SITE_MANAGER, Role.SUPERVISOR),
   UploadController.signUploadUrls,
 );
 
 uploadRouter.post(
   "/view-urls",
-  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SITE_MANAGER, Role.SUPERVISOR),
   UploadController.getReportViewUrls,
 );

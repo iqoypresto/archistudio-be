@@ -48,7 +48,7 @@ export class CommsRepository {
     });
   }
 
-  /** Menyimpan catatan Comms baru (US-20, BR-35). */
+  /** Menyimpan catatan Comms baru beserta audit pencatat (US-20, BR-35, D-05). */
   static async create(data: {
     projectId: string;
     direction: CommsDirection;
@@ -59,6 +59,7 @@ export class CommsRepository {
     attachmentName: string | null;
     attachmentMime: string | null;
     attachmentBytes: number | null;
+    createdById: string;
   }): Promise<RawCommsEntry> {
     return prisma.commsEntry.create({ data, select: commsSelect });
   }

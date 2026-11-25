@@ -8,7 +8,7 @@ projectAreaRouter.use(AuthMiddleware.authenticate);
 
 projectAreaRouter.get(
   "/",
-  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SUPERVISOR"),
+  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SITE_MANAGER", "SUPERVISOR"),
   AreaController.getAreasByProject,
 );
 

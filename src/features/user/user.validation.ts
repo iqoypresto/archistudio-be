@@ -42,7 +42,7 @@ export class UserValidation {
         .max(20)
         .regex(phoneRegex, "Nomor HP hanya boleh berisi angka dan tanda plus (+)."),
       password: z.string().min(6, "Kata sandi minimal 6 karakter.").max(100),
-      role: z.enum(["ADMIN", "SUPERVISOR"]),
+      role: z.enum(["ADMIN", "SITE_MANAGER", "SUPERVISOR"]),
       jobTitle: z.string().trim().max(50).optional(),
     }),
 
@@ -63,7 +63,7 @@ export class UserValidation {
           .max(20)
           .regex(phoneRegex, "Nomor HP tidak valid.")
           .optional(),
-        role: z.enum(["ADMIN", "SUPERVISOR"]).optional(),
+        role: z.enum(["ADMIN", "SITE_MANAGER", "SUPERVISOR"]).optional(),
         jobTitle: z.string().trim().max(50).optional(),
       })
       .refine(

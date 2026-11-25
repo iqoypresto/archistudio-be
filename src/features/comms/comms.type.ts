@@ -1,4 +1,4 @@
-import type { CommsDirection } from "@prisma/client";
+import type { CommsDirection, Role } from "@prisma/client";
 import type { z } from "zod";
 import type { CommsValidation } from "./comms.validation.js";
 
@@ -13,6 +13,12 @@ export interface CommsAttachmentInput {
   sizeBytes: number;
 }
 
+export interface CommsActorSummary {
+  id: string;
+  name: string;
+  role: Role;
+}
+
 export interface CommsEntryItem {
   id: string;
   projectId: string;
@@ -25,6 +31,8 @@ export interface CommsEntryItem {
   attachmentMime: string | null;
   attachmentBytes: number | null;
   attachmentViewUrl: string | null;
+  createdBy: CommsActorSummary;
+  updatedBy: CommsActorSummary | null;
   createdAt: Date;
   updatedAt: Date;
 }

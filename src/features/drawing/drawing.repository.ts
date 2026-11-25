@@ -1,4 +1,3 @@
-import type { DrawingDirection } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
 import {
   drawingSelect,
@@ -11,13 +10,11 @@ export class DrawingRepository {
   /** Mengambil daftar Drawing pada satu project (US-18, BR-32). */
   static async findManyByProject(params: {
     projectId: string;
-    direction?: DrawingDirection;
     includeArchived?: boolean;
   }): Promise<RawDrawingRecord[]> {
     return prisma.drawing.findMany({
       where: {
         projectId: params.projectId,
-        ...(params.direction && { direction: params.direction }),
         ...(!params.includeArchived && { archivedAt: null }),
       },
       select: drawingSelect,
@@ -36,7 +33,6 @@ export class DrawingRepository {
   /** Menyimpan metadata Drawing baru setelah direct upload ke object storage (US-18, BR-32, BR-33). */
   static async create(data: {
     projectId: string;
-    direction: DrawingDirection;
     storageKey: string;
     fileName: string;
     mimeType: string;

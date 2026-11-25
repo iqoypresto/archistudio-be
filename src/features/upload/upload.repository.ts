@@ -74,6 +74,7 @@ export class UploadRepository {
         },
         area: {
           select: {
+            project: { select: { siteManagerId: true } },
             assignments: { select: { supervisorId: true } },
           },
         },

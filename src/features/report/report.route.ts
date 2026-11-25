@@ -9,7 +9,11 @@ export const reportRouter = Router();
 reportRouter.post("/upload-sessions/cleanup", authorizeUploadCleanup, ReportController.cleanupUploadSessions);
 reportRouter.use(AuthMiddleware.authenticate);
 
-reportRouter.post("/upload-sessions", AuthMiddleware.authorizeRoles(Role.SUPERVISOR), ReportController.createUploadSession);
+reportRouter.post(
+  "/upload-sessions",
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.SITE_MANAGER),
+  ReportController.createUploadSession,
+);
 
 reportRouter.get(
   "/archive",
@@ -19,31 +23,31 @@ reportRouter.get(
 
 reportRouter.get(
   "/my-areas-status",
-  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.SITE_MANAGER),
   ReportController.getMyAreasStatus,
 );
 
 reportRouter.get(
   "/",
-  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SITE_MANAGER, Role.SUPERVISOR),
   ReportController.listReports,
 );
 
 reportRouter.get(
   "/:id",
-  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SITE_MANAGER, Role.SUPERVISOR),
   ReportController.getReportById,
 );
 
 reportRouter.post(
   "/submit",
-  AuthMiddleware.authorizeRoles(Role.SUPERVISOR),
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.SITE_MANAGER),
   ReportController.submitNew,
 );
 
 reportRouter.patch(
   "/:id/revise",
-  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SUPERVISOR),
+  AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN, Role.SITE_MANAGER, Role.SUPERVISOR),
   ReportController.reviseReport,
 );
 

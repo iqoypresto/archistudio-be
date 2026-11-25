@@ -2,6 +2,7 @@ import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import { PaginationHelper } from "../../helpers/pagination.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
+import { UserRepository } from "../user/user.repository.js";
 import {
   assertOwnerProjectAction,
   assertProjectNotArchived,
@@ -26,11 +27,45 @@ function assertManagerRole(actor: AuthenticatedUser, message: string): void {
   }
 }
 
+async function assertValidSiteManager(siteManagerId?: string | null): Promise<void> {
+  if (!siteManagerId) return;
+  const candidate = await UserRepository.findById(siteManagerId);
+  if (!candidate || !candidate.isActive || candidate.role !== "SITE_MANAGER") {
+    throw new ResponseError(
+      "VALIDATION_ERROR",
+      "Site Manager yang dipilih tidak aktif atau bukan peran Site Manager.",
+    );
+  }
+}
+
 export class ProjectService {
-  /** Mengambil daftar project aktif dengan paginasi dan filter RBAC (US-04, BR-03, BR-39). */
+  /** Guard terpusat akses project untuk 4 role (BR-03, BR-40, BR-41, ADR-10). */
+  static async assertCanAccessProject(
+    actor: AuthenticatedUser,
+    id: string,
+    forbiddenMessage = "Anda hanya dapat mengakses project aktif yang ditugaskan kepada Anda.",
+  ): Promise<ProjectDetail> {
+    if (actor.role === "SUPERVISOR" || actor.role === "SITE_MANAGER") {
+      const allowed =
+        actor.role === "SITE_MANAGER"
+          ? await ProjectRepository.findById(id, undefined, actor.id)
+          : await ProjectRepository.findById(id, actor.id);
+      if (allowed) return allowed;
+      const anyProject = await ProjectRepository.findById(id);
+      if (!anyProject) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
+      throw new ResponseError("AREA_SCOPE_FORBIDDEN", forbiddenMessage);
+    }
+
+    const project = await ProjectRepository.findById(id);
+    if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
+    return project;
+  }
+
+  /** Mengambil daftar project aktif dengan paginasi dan filter RBAC (US-04, BR-03, BR-39, BR-41). */
   static async getProjects(actor: AuthenticatedUser, query: GetProjectsQuery) {
     const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(query.page, query.pageSize);
     const supervisorUserId = actor.role === "SUPERVISOR" ? actor.id : undefined;
+    const siteManagerUserId = actor.role === "SITE_MANAGER" ? actor.id : undefined;
 
     const [projects, total] = await ProjectRepository.findManyAndCount({
       skip,
@@ -40,6 +75,7 @@ export class ProjectService {
       sortBy: query.sortBy,
       sortOrder: query.sortOrder,
       supervisorUserId,
+      siteManagerUserId,
     });
     return { projects, meta: PaginationHelper.buildMeta(page, pageSize, total) };
   }
@@ -58,25 +94,12 @@ export class ProjectService {
     return query.year ? mapped.filter((item) => item.archiveYear === query.year) : mapped;
   }
 
-  /** Mengambil detail project dengan verifikasi hak akses role (US-04, BR-03, BR-39). */
+  /** Mengambil detail project dengan verifikasi hak akses role (US-04, BR-03, BR-39, BR-41). */
   static async getProjectById(actor: AuthenticatedUser, id: string): Promise<ProjectDetail> {
-    if (actor.role === "SUPERVISOR") {
-      const allowed = await ProjectRepository.findById(id, actor.id);
-      if (allowed) return allowed;
-      const anyProject = await ProjectRepository.findById(id);
-      if (!anyProject) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
-      throw new ResponseError(
-        "AREA_SCOPE_FORBIDDEN",
-        "Anda hanya dapat mengakses project aktif yang ditugaskan kepada Anda.",
-      );
-    }
-
-    const project = await ProjectRepository.findById(id);
-    if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
-    return project;
+    return ProjectService.assertCanAccessProject(actor, id);
   }
 
-  /** Membuat master project baru (US-04, AC-04.1, BR-07, BR-11, BR-13). */
+  /** Membuat master project baru (US-04, AC-04.1, BR-07, BR-11, BR-13, BR-41). */
   static async createProject(
     actor: AuthenticatedUser,
     dto: CreateProjectDTO,
@@ -86,6 +109,7 @@ export class ProjectService {
     if (await ProjectRepository.findByCode(dto.code)) {
       throw new ResponseError("CONFLICT", "Kode project sudah digunakan.");
     }
+    await assertValidSiteManager(dto.siteManagerId);
 
     return ProjectRepository.create({
       code: dto.code,
@@ -97,10 +121,11 @@ export class ProjectService {
       status: dto.status,
       timezone: dto.timezone,
       routineHolidays: dto.routineHolidays,
+      siteManagerId: dto.siteManagerId ?? null,
     });
   }
 
-  /** Memperbarui data project aktif (US-04, BR-07, BR-11, BR-12, BR-39). */
+  /** Memperbarui data project aktif (US-04, BR-07, BR-11, BR-12, BR-39, BR-41). */
   static async updateProject(
     actor: AuthenticatedUser,
     id: string,
@@ -119,6 +144,9 @@ export class ProjectService {
     const currentEnd = existing.endDate ? existing.endDate.toISOString().slice(0, 10) : null;
     const effectiveEnd = dto.endDate !== undefined ? dto.endDate : currentEnd;
     if (effectiveEnd && effectiveEnd < effectiveStart) throw new ResponseError("INVALID_PROJECT_DATES");
+    if (dto.siteManagerId !== undefined) {
+      await assertValidSiteManager(dto.siteManagerId);
+    }
 
     return ProjectRepository.update(id, {
       ...(dto.code && { code: dto.code }),
@@ -130,6 +158,11 @@ export class ProjectService {
       ...(dto.status && { status: dto.status }),
       ...(dto.timezone && { timezone: dto.timezone }),
       ...(dto.routineHolidays && { routineHolidays: dto.routineHolidays }),
+      ...(dto.siteManagerId !== undefined && {
+        siteManager: dto.siteManagerId
+          ? { connect: { id: dto.siteManagerId } }
+          : { disconnect: true },
+      }),
     });
   }
 

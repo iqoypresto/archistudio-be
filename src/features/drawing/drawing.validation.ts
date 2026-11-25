@@ -1,4 +1,3 @@
-import { DrawingDirection } from "@prisma/client";
 import { z } from "zod";
 
 export class DrawingValidation {
@@ -13,7 +12,6 @@ export class DrawingValidation {
 
   static readonly QUERY = {
     list: z.object({
-      direction: z.nativeEnum(DrawingDirection).optional(),
       includeArchived: z
         .enum(["true", "false"])
         .optional()
@@ -23,7 +21,6 @@ export class DrawingValidation {
 
   static readonly BODY = {
     create: z.object({
-      direction: z.nativeEnum(DrawingDirection),
       storageKey: z.string().trim().min(1, "Kunci file Drawing wajib diisi.").max(500),
       fileName: z.string().trim().min(1, "Nama file Drawing wajib diisi.").max(255),
       mimeType: z.string().trim().min(1, "Tipe file Drawing wajib diisi.").max(100),

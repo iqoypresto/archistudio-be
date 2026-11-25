@@ -57,7 +57,13 @@ export class UserService {
     }
 
     const passwordHash = await hashPassword(dto.password);
-    const jobTitle = dto.jobTitle?.trim() || (dto.role === "SUPERVISOR" ? "Supervisor" : "Admin");
+    const defaultJobTitle =
+      dto.role === "SUPERVISOR"
+        ? "Supervisor"
+        : dto.role === "SITE_MANAGER"
+          ? "Site Manager"
+          : "Admin";
+    const jobTitle = dto.jobTitle?.trim() || defaultJobTitle;
 
     return UserRepository.create({
       name: dto.name,
@@ -81,16 +87,16 @@ export class UserService {
     }
 
     if (actor.role === "ADMIN") {
-      if (target.role === "OWNER" || target.role === "ADMIN") {
+      if (target.role !== "SUPERVISOR") {
         throw new ResponseError(
           "FORBIDDEN",
-          "Admin tidak berwenang mengubah akun Owner atau Admin lain.",
+          "Admin tidak berwenang mengubah akun Owner, Admin, atau Site Manager.",
         );
       }
       if (dto.role && dto.role !== "SUPERVISOR") {
         throw new ResponseError(
           "FORBIDDEN",
-          "Admin tidak dapat mengubah peran menjadi Admin atau Owner.",
+          "Admin tidak dapat mengubah peran menjadi selain Supervisor.",
         );
       }
     }

@@ -77,6 +77,7 @@ export function makeReportRecord(overrides?: {
         startDate: new Date("2026-11-16T00:00:00.000Z"),
         endDate: null,
         routineHolidays: [0],
+        siteManagerId: null as string | null,
         deletedAt: null,
       },
       assignments: [

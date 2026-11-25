@@ -44,6 +44,7 @@ export class ReportValidation {
       projectId: z.string().uuid().optional(),
       areaId: z.string().uuid().optional(),
       supervisorId: z.string().uuid().optional(),
+      scope: z.enum(["own", "team"]).optional(),
       reportDate: z.string().regex(DATE_YYYY_MM_DD).optional(),
       dateFrom: z.string().regex(DATE_YYYY_MM_DD).optional(),
       dateTo: z.string().regex(DATE_YYYY_MM_DD).optional(),
