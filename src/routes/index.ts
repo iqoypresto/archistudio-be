@@ -12,6 +12,8 @@ import { reportRouter } from "../features/report/report.route.js";
 import { uploadRouter } from "../features/upload/upload.route.js";
 import { projectRouter } from "../features/project/project.route.js";
 import { userRouter } from "../features/user/user.route.js";
+import { fieldApiRouter } from "./field-api.route.js";
+import { officeApiRouter } from "./office-api.route.js";
 import { ResponseHelper } from "../helpers/response.helper.js";
 
 export const apiRouter = Router();
@@ -21,6 +23,8 @@ apiRouter.get("/health", (_req, res) => {
 });
 
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/office", officeApiRouter);
+apiRouter.use("/field", fieldApiRouter);
 apiRouter.use("/uploads", uploadRouter);
 apiRouter.use("/payments", paymentRouter);
 apiRouter.use("/projects/:projectId/drawings", drawingRouter);

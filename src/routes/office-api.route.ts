@@ -1,0 +1,34 @@
+import { Role } from "@prisma/client";
+import { Router } from "express";
+import { areaRouter, projectAreaRouter } from "../features/area/area.route.js";
+import { dashboardRouter } from "../features/dashboard/dashboard.route.js";
+import { drawingRouter } from "../features/drawing/drawing.route.js";
+import { commsRouter } from "../features/comms/comms.route.js";
+import { pdfExportRouter } from "../features/pdf-export/pdf-export.route.js";
+import { paymentRouter } from "../features/payment/payment.route.js";
+import { projectDocumentRouter } from "../features/project-document/project-document.route.js";
+import { reportRouter } from "../features/report/report.route.js";
+import { uploadRouter } from "../features/upload/upload.route.js";
+import { projectRouter } from "../features/project/project.route.js";
+import { userRouter } from "../features/user/user.route.js";
+import { AuthMiddleware } from "../middlewares/auth.middleware.js";
+
+export const officeApiRouter = Router();
+officeApiRouter.use(AuthMiddleware.authenticate);
+officeApiRouter.use(AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN));
+
+officeApiRouter.use("/projects/:projectId/drawings", drawingRouter);
+officeApiRouter.use("/drawings", drawingRouter);
+officeApiRouter.use("/projects/:projectId/documents", projectDocumentRouter);
+officeApiRouter.use("/documents", projectDocumentRouter);
+officeApiRouter.use("/projects/:projectId/comms", commsRouter);
+officeApiRouter.use("/comms", commsRouter);
+officeApiRouter.use("/projects/:projectId/areas", projectAreaRouter);
+officeApiRouter.use("/projects", projectRouter);
+officeApiRouter.use("/areas", areaRouter);
+officeApiRouter.use("/reports", reportRouter);
+officeApiRouter.use("/dashboard", dashboardRouter);
+officeApiRouter.use("/exports", pdfExportRouter);
+officeApiRouter.use("/uploads", uploadRouter);
+officeApiRouter.use("/payments", paymentRouter);
+officeApiRouter.use("/users", userRouter);
