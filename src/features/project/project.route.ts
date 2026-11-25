@@ -8,7 +8,7 @@ projectRouter.use(AuthMiddleware.authenticate);
 
 projectRouter.get(
   "/",
-  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SUPERVISOR"),
+  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SITE_MANAGER", "SUPERVISOR"),
   ProjectController.getProjects,
 );
 
@@ -20,7 +20,7 @@ projectRouter.get(
 
 projectRouter.get(
   "/:id",
-  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SUPERVISOR"),
+  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SITE_MANAGER", "SUPERVISOR"),
   ProjectController.getProjectById,
 );
 

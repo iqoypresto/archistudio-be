@@ -1,4 +1,5 @@
 import { CommsDirection, Prisma, ProjectStatus } from "@prisma/client";
+import { canEditCommsEntry, isCommsAllowedRole } from "../../helpers/access-policy.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import type { CommsAttachmentInput, CommsEntryItem } from "./comms.type.js";
@@ -29,6 +30,10 @@ export const commsSelect = Prisma.validator<Prisma.CommsEntrySelect>()({
   attachmentName: true,
   attachmentMime: true,
   attachmentBytes: true,
+  createdById: true,
+  updatedById: true,
+  createdBy: { select: { id: true, name: true, role: true } },
+  updatedBy: { select: { id: true, name: true, role: true } },
   createdAt: true,
   updatedAt: true,
 });
@@ -49,10 +54,20 @@ export type RawCommsWithProject = Prisma.CommsEntryGetPayload<{
   select: typeof commsWithProjectSelect;
 }>;
 
-/** Memastikan modul Comms hanya dapat diakses oleh OWNER (BR-35). */
-export function assertOwnerCommsAccess(actor: AuthenticatedUser): void {
-  if (actor.role !== "OWNER") {
-    throw new ResponseError("FORBIDDEN", "Modul Comms project hanya dapat diakses oleh Owner.");
+/** Memastikan role pengguna termasuk kebijakan akses modul Comms (BR-35, K-02). */
+export function assertCommsRoleAccess(actor: AuthenticatedUser): void {
+  if (!isCommsAllowedRole(actor.role)) {
+    throw new ResponseError("FORBIDDEN", "Anda tidak memiliki akses ke modul Comms project.");
+  }
+}
+
+/** Memastikan hanya pembuat catatan atau OWNER yang boleh mengubah entri Comms (BR-35, D-05). */
+export function assertCanEditComms(actor: AuthenticatedUser, createdById: string): void {
+  if (!canEditCommsEntry(actor, createdById)) {
+    throw new ResponseError(
+      "FORBIDDEN",
+      "Hanya pembuat catatan atau Owner yang dapat mengubah catatan Comms ini.",
+    );
   }
 }
 
@@ -109,6 +124,8 @@ export function formatCommsEntry(
     attachmentMime: raw.attachmentMime,
     attachmentBytes: raw.attachmentBytes,
     attachmentViewUrl,
+    createdBy: raw.createdBy,
+    updatedBy: raw.updatedBy ?? null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };

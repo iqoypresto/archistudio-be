@@ -1,4 +1,5 @@
 import { addDaysToDateString, parseDateOnlyUtc } from "../../helpers/date.helper.js";
+import { isFieldRole } from "../../helpers/access-policy.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { ProjectRepository } from "../project/project.repository.js";
@@ -14,10 +15,10 @@ import type {
   UpdateAreaDTO,
 } from "./area.type.js";
 
-/** Memastikan target user berstatus aktif dengan peran SUPERVISOR (BR-05, BR-08, BR-09). */
+/** Memastikan target user berstatus aktif dengan peran SUPERVISOR atau SITE_MANAGER (BR-05, BR-08, K-01). */
 async function assertActiveSupervisor(supervisorId: string): Promise<void> {
   const supervisor = await UserRepository.findById(supervisorId);
-  if (!supervisor || !supervisor.isActive || supervisor.role !== "SUPERVISOR") {
+  if (!supervisor || !supervisor.isActive || !isFieldRole(supervisor.role)) {
     throw new ResponseError("SUPERVISOR_NOT_ACTIVE");
   }
 }
@@ -43,7 +44,7 @@ function resolvePreviousAssignmentEndDate(
 }
 
 export class AreaService {
-  /** Mengambil daftar area dalam project sesuai scope aktif role (US-05, US-24, BR-03, BR-09). */
+  /** Mengambil daftar area dalam project sesuai scope aktif role (US-05, US-24, BR-03, BR-09, BR-41). */
   static async getAreasByProject(
     actor: AuthenticatedUser,
     projectId: string,
@@ -51,6 +52,17 @@ export class AreaService {
     const project = await ProjectRepository.findById(projectId);
     if (!project) {
       throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
+    }
+
+    if (actor.role === "SITE_MANAGER") {
+      if (project.siteManagerId === actor.id) {
+        return AreaRepository.findManyByProjectId(projectId);
+      }
+      const ownAreas = await AreaRepository.findManyByProjectId(projectId, actor.id);
+      if (ownAreas.length === 0) {
+        throw new ResponseError("AREA_SCOPE_FORBIDDEN");
+      }
+      return ownAreas;
     }
 
     const supervisorUserId = actor.role === "SUPERVISOR" ? actor.id : undefined;

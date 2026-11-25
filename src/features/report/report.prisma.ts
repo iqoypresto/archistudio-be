@@ -41,6 +41,7 @@ export const REPORT_DETAIL_INCLUDE = Prisma.validator<Prisma.DailyReportInclude>
           startDate: true,
           endDate: true,
           routineHolidays: true,
+          siteManagerId: true,
           deletedAt: true,
         },
       },

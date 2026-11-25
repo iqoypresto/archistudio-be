@@ -11,6 +11,7 @@ datasource db {
 enum Role {
   OWNER
   ADMIN
+  SITE_MANAGER
   SUPERVISOR
 }
 enum ProjectStatus {
@@ -55,11 +56,6 @@ enum PaymentStatus {
   UNPAID
 }
 
-enum DrawingDirection {
-  IN
-  OUT
-}
-
 enum ProjectDocumentType {
   QUOTATION
   BAST
@@ -83,16 +79,19 @@ model User {
   deletedAt    DateTime? @map("deleted_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
-  refreshTokens     RefreshToken[]
-  supervisorAssigns AreaAssignment[] @relation("SupervisorAssignments")
-  assignedByRecords AreaAssignment[] @relation("AssignedByUser")
-  submittedReports  DailyReport[]    @relation("SupervisorReports")
-  revisedReports    DailyReport[]    @relation("RevisedByOwner")
-  uploadedPhotos    ReportPhoto[]
+  refreshTokens        RefreshToken[]
+  managedProjects      Project[]             @relation("ProjectSiteManager")
+  supervisorAssigns    AreaAssignment[]      @relation("SupervisorAssignments")
+  assignedByRecords    AreaAssignment[]      @relation("AssignedByUser")
+  submittedReports     DailyReport[]         @relation("SupervisorReports")
+  revisedReports       DailyReport[]         @relation("RevisedByOwner")
+  uploadedPhotos       ReportPhoto[]
   reportUploadSessions ReportUploadSession[]
-  reportRevisions   ReportRevision[]
-  reportUnlocks     ReportUnlock[]
-  paymentRecords    PaymentRecord[]
+  reportRevisions      ReportRevision[]
+  reportUnlocks        ReportUnlock[]
+  paymentRecords       PaymentRecord[]
+  createdCommsEntries  CommsEntry[]          @relation("CommsCreatedBy")
+  updatedCommsEntries  CommsEntry[]          @relation("CommsUpdatedBy")
   @@index([role, isActive])
   @@map("users")
 }
@@ -120,14 +119,17 @@ model Project {
   routineHolidays Int[]         @default([0]) @map("routine_holidays") /// 0=Minggu..6=Sabtu, Lihat BR-11
   completedAt     DateTime?     @map("completed_at") /// Diisi Owner saat status SELESAI, tahun arsip BR-39
   archivedAt      DateTime?     @map("archived_at") /// Waktu arsip manual, tahun arsip BR-39
+  siteManagerId   String?       @map("site_manager_id") /// 1 Site Manager per Project (nullable, BR-41, K-03)
   deletedAt       DateTime?     @map("deleted_at")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
+  siteManager     User?             @relation("ProjectSiteManager", fields: [siteManagerId], references: [id])
   areas           Area[]
   drawings        Drawing[]
   documents       ProjectDocument[]
   commsEntries    CommsEntry[]
   @@index([status, deletedAt])
+  @@index([siteManagerId])
   @@map("projects")
 }
 
@@ -312,19 +314,18 @@ model PaymentRecord {
 }
 
 model Drawing {
-  id         String           @id @default(uuid())
-  projectId  String           @map("project_id")
-  direction  DrawingDirection
-  storageKey String           @map("storage_key")
-  fileName   String           @map("file_name")
-  mimeType   String           @map("mime_type")
-  sizeBytes  Int              @map("size_bytes")
-  uploadedAt DateTime         @default(now()) @map("uploaded_at")
-  archivedAt DateTime?        @map("archived_at")
+  id         String    @id @default(uuid())
+  projectId  String    @map("project_id")
+  storageKey String    @map("storage_key")
+  fileName   String    @map("file_name")
+  mimeType   String    @map("mime_type")
+  sizeBytes  Int       @map("size_bytes")
+  uploadedAt DateTime  @default(now()) @map("uploaded_at")
+  archivedAt DateTime? @map("archived_at")
 
   project Project @relation(fields: [projectId], references: [id])
 
-  @@index([projectId, direction, archivedAt, uploadedAt])
+  @@index([projectId, archivedAt, uploadedAt])
   @@map("drawings")
 }
 
@@ -355,11 +356,15 @@ model CommsEntry {
   attachmentName  String?       @map("attachment_name")
   attachmentMime  String?       @map("attachment_mime")
   attachmentBytes Int?          @map("attachment_bytes")
+  createdById     String        @map("created_by_id")
+  updatedById     String?       @map("updated_by_id")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  project Project @relation(fields: [projectId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id])
+  createdBy User    @relation("CommsCreatedBy", fields: [createdById], references: [id])
+  updatedBy User?   @relation("CommsUpdatedBy", fields: [updatedById], references: [id])
 
-  @@index([projectId, entryDate])
+  @@index([projectId, direction, entryDate])
   @@map("comms_entries")
 }

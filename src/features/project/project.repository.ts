@@ -13,6 +13,10 @@ const projectSelect = Prisma.validator<Prisma.ProjectSelect>()({
   status: true,
   timezone: true,
   routineHolidays: true,
+  siteManagerId: true,
+  siteManager: {
+    select: { id: true, name: true, phone: true },
+  },
   completedAt: true,
   archivedAt: true,
   createdAt: true,
@@ -44,24 +48,42 @@ export interface FindProjectsParams {
   sortBy?: "name" | "code" | "startDate" | "createdAt";
   sortOrder?: "asc" | "desc";
   supervisorUserId?: string;
+  siteManagerUserId?: string;
 }
 
 export class ProjectRepository {
-  /** Mengambil daftar project aktif (non-arsip & non-selesai) berpaginasi (US-04, BR-03, BR-39). */
+  /** Mengambil daftar project aktif (non-arsip & non-selesai) berpaginasi (US-04, BR-03, BR-39, BR-41). */
   static async findManyAndCount(params: FindProjectsParams): Promise<[ProjectListItem[], number]> {
+    const scopeWhere: Prisma.ProjectWhereInput = params.siteManagerUserId
+      ? {
+          OR: [
+            { siteManagerId: params.siteManagerUserId },
+            {
+              areas: {
+                some: {
+                  deletedAt: null,
+                  assignments: { some: { supervisorId: params.siteManagerUserId, endDate: null } },
+                },
+              },
+            },
+          ],
+        }
+      : params.supervisorUserId
+        ? {
+            areas: {
+              some: {
+                deletedAt: null,
+                assignments: { some: { supervisorId: params.supervisorUserId, endDate: null } },
+              },
+            },
+          }
+        : {};
+
     const where: Prisma.ProjectWhereInput = {
       deletedAt: null,
       archivedAt: null,
       status: params.status ?? { not: ProjectStatus.SELESAI },
-      ...(params.supervisorUserId && {
-        areas: {
-          some: {
-            deletedAt: null,
-            assignments: { some: { supervisorId: params.supervisorUserId, endDate: null } },
-          },
-        },
-      }),
-      ...buildSearchFilter(params.search),
+      AND: [scopeWhere, buildSearchFilter(params.search)],
     };
 
     const orderBy: Prisma.ProjectOrderByWithRelationInput = {
@@ -89,13 +111,32 @@ export class ProjectRepository {
     });
   }
 
-  /** Mengambil detail project beserta ringkasan area; SUPERVISOR dibatasi pada project aktif (BR-03, BR-39). */
-  static async findById(id: string, supervisorUserId?: string): Promise<ProjectDetail | null> {
+  /** Mengambil detail project beserta ringkasan area; field role dibatasi pada project aktif sesuai scope (BR-03, BR-39, BR-41). */
+  static async findById(
+    id: string,
+    supervisorUserId?: string,
+    siteManagerUserId?: string,
+  ): Promise<ProjectDetail | null> {
     return prisma.project.findFirst({
       where: {
         id,
         deletedAt: null,
-        ...(supervisorUserId && {
+        ...(siteManagerUserId && {
+          archivedAt: null,
+          status: { not: ProjectStatus.SELESAI },
+          OR: [
+            { siteManagerId: siteManagerUserId },
+            {
+              areas: {
+                some: {
+                  deletedAt: null,
+                  assignments: { some: { supervisorId: siteManagerUserId, endDate: null } },
+                },
+              },
+            },
+          ],
+        }),
+        ...(supervisorUserId && !siteManagerUserId && {
           archivedAt: null,
           status: { not: ProjectStatus.SELESAI },
           areas: {
@@ -111,9 +152,18 @@ export class ProjectRepository {
         areas: {
           where: {
             deletedAt: null,
-            ...(supervisorUserId && {
-              assignments: { some: { supervisorId: supervisorUserId, endDate: null } },
-            }),
+            ...(siteManagerUserId
+              ? {
+                  OR: [
+                    { project: { siteManagerId: siteManagerUserId } },
+                    { assignments: { some: { supervisorId: siteManagerUserId, endDate: null } } },
+                  ],
+                }
+              : supervisorUserId
+                ? {
+                    assignments: { some: { supervisorId: supervisorUserId, endDate: null } },
+                  }
+                : {}),
           },
           select: { id: true, code: true, name: true },
           orderBy: { code: "asc" },
@@ -141,9 +191,10 @@ export class ProjectRepository {
     status: ProjectStatus;
     timezone: string;
     routineHolidays: number[];
+    siteManagerId?: string | null;
   }): Promise<ProjectListItem> {
     return prisma.project.create({
-      data: { ...data, endDate: data.endDate ?? null },
+      data: { ...data, endDate: data.endDate ?? null, siteManagerId: data.siteManagerId ?? null },
       select: projectSelect,
     });
   }

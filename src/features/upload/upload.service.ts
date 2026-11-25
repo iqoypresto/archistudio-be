@@ -1,4 +1,5 @@
 import { Role } from "@prisma/client";
+import { isCommsAllowedRole, isFieldRole } from "../../helpers/access-policy.helper.js";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import {
@@ -7,6 +8,7 @@ import {
   createSignedUploadUrl,
   createSignedViewUrlsMap,
 } from "../../utils/storage/storage.adapter.js";
+import { ProjectService } from "../project/project.service.js";
 import { UploadRepository } from "./upload.repository.js";
 import type {
   SignUploadBody,
@@ -75,6 +77,9 @@ export class UploadService {
     body: Extract<SignUploadBody, { areaId: string }>,
     user: AuthenticatedUser,
   ): Promise<SignedUploadFileItem[]> {
+    if (user.role === Role.ADMIN) {
+      throw new ResponseError("FORBIDDEN", "Admin tidak dapat mengunggah foto laporan harian.");
+    }
     if (body.files.length < MIN_PHOTOS || body.files.length > MAX_PHOTOS) {
       throw new ResponseError("INVALID_PHOTO_COUNT");
     }
@@ -82,7 +87,8 @@ export class UploadService {
     if (!area) {
       throw new ResponseError("RESOURCE_NOT_FOUND");
     }
-    if (user.role === Role.SUPERVISOR) {
+    const fieldActor = isFieldRole(user.role);
+    if (fieldActor) {
       if (!body.sessionId) throw new ResponseError("VALIDATION_ERROR", "Sesi upload wajib diisi.");
       assertSupervisorAreaScope(area.assignments, user.id, body.reportDate);
       await ReportUploadSessionService.assertCanSign(body as typeof body & { sessionId: string }, user);
@@ -94,10 +100,10 @@ export class UploadService {
           areaId: area.id,
           reportDate: body.reportDate,
           contentType: file.contentType,
-          supervisorId: user.role === Role.SUPERVISOR ? user.id : undefined,
-          uploadSessionId: user.role === Role.SUPERVISOR ? body.sessionId : undefined,
+          supervisorId: fieldActor ? user.id : undefined,
+          uploadSessionId: fieldActor ? body.sessionId : undefined,
         });
-        if (user.role === Role.SUPERVISOR && body.sessionId) {
+        if (fieldActor && body.sessionId) {
           await ReportUploadSessionRepository.addPhoto(body.sessionId, storageKey);
         }
         return createSignedUploadUrl({ storageKey, contentType: file.contentType });
@@ -110,20 +116,29 @@ export class UploadService {
     body: PurposeUploadBody,
     user: AuthenticatedUser,
   ): Promise<SignedPurposeUploadItem> {
-    if (user.role !== Role.OWNER) throw new ResponseError("FORBIDDEN");
+    if (body.purpose === "comms-attachment") {
+      if (!isCommsAllowedRole(user.role)) throw new ResponseError("FORBIDDEN");
+      await ProjectService.assertCanAccessProject(
+        user,
+        body.projectId,
+        "Anda tidak memiliki akses ke project ini untuk mengunggah lampiran Comms.",
+      );
+    } else if (user.role !== Role.OWNER) {
+      throw new ResponseError("FORBIDDEN");
+    }
     assertPurposeFileAllowed(body);
     const referenceId = await resolveUploadReference(body);
     const storageKey = buildPurposeStorageKey({
       purpose: body.purpose,
       referenceId,
-      category: "direction" in body ? body.direction : "type" in body ? body.type : undefined,
+      category: "type" in body ? body.type : undefined,
       contentType: body.file.contentType,
     });
     const signed = await createSignedUploadUrl({ storageKey, contentType: body.file.contentType });
     return { ...signed, purpose: body.purpose, ...body.file };
   }
 
-  /** Menghasilkan presigned GET URL untuk galeri foto laporan sesuai cakupan role (BR-03). */
+  /** Menghasilkan presigned GET URL untuk galeri foto laporan sesuai cakupan role (BR-03, BR-41). */
   static async getReportViewUrls(
     body: ViewUrlsBody,
     user: AuthenticatedUser,
@@ -135,6 +150,12 @@ export class UploadService {
     if (user.role === Role.SUPERVISOR) {
       const canAccess =
         report.supervisorId === user.id ||
+        report.area.assignments.some((a) => a.supervisorId === user.id);
+      if (!canAccess) throw new ResponseError("AREA_SCOPE_FORBIDDEN");
+    } else if (user.role === Role.SITE_MANAGER) {
+      const canAccess =
+        report.supervisorId === user.id ||
+        report.area.project.siteManagerId === user.id ||
         report.area.assignments.some((a) => a.supervisorId === user.id);
       if (!canAccess) throw new ResponseError("AREA_SCOPE_FORBIDDEN");
     }

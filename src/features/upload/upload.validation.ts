@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DrawingDirection, ProjectDocumentType } from "@prisma/client";
+import { ProjectDocumentType } from "@prisma/client";
 
 const MAX_COMPRESSED_BYTES = 5 * 1024 * 1024;
 const DATE_YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
@@ -40,7 +40,6 @@ export class UploadValidation {
         z.object({
           purpose: z.literal("drawing"),
           projectId: z.string().uuid("ID project tidak valid."),
-          direction: z.nativeEnum(DrawingDirection),
           file: z.object({
             fileName: z.string().trim().min(1).max(255),
             contentType: z.string().trim().min(1),

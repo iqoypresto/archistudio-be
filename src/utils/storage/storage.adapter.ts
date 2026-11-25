@@ -96,7 +96,7 @@ export function buildPurposeStorageKey(params: {
 
 function resolvePurposeFolder(purpose: PurposeUpload, referenceId: string, category?: string): string {
   if (purpose === "payment-proof") return `payments/${referenceId}/proofs`;
-  if (purpose === "drawing") return `projects/${referenceId}/drawings/${category}`;
+  if (purpose === "drawing") return `projects/${referenceId}/drawings`;
   if (purpose === "project-document") return `projects/${referenceId}/documents/${category}`;
   return `projects/${referenceId}/comms-attachments`;
 }

@@ -76,6 +76,7 @@ describe("TASK-08 Backend Export PDF Laporan Harian Opsi A (US-15, BR-27..BR-31)
       routineHolidays: [0],
       completedAt: null,
       archivedAt: null,
+      siteManagerId: null,
       deletedAt: null,
       createdAt,
       updatedAt,

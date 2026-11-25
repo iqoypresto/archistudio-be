@@ -1,4 +1,4 @@
-import { DrawingDirection, ProjectDocumentType, ProjectStatus, Role } from "@prisma/client";
+import { ProjectDocumentType, ProjectStatus, Role } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.js";
 import { DrawingRepository } from "../src/features/drawing/drawing.repository.js";
@@ -23,6 +23,7 @@ const PROJ_ID = "11111111-1111-4111-8111-111111111111";
 const now = new Date("2026-11-20T00:00:00.000Z");
 const ownerActor: AuthenticatedUser = { id: "u-owner", role: Role.OWNER, username: "owner", name: "Owner", jobTitle: "Owner" };
 const adminActor: AuthenticatedUser = { id: "u-admin", role: Role.ADMIN, username: "admin", name: "Admin", jobTitle: "Admin" };
+const smActor: AuthenticatedUser = { id: "u-sm", role: Role.SITE_MANAGER, username: "sm", name: "Site Manager", jobTitle: "Site Manager" };
 const supActor: AuthenticatedUser = { id: "u-sup", role: Role.SUPERVISOR, username: "sup", name: "Sup", jobTitle: "Supervisor" };
 
 const makeToken = (actor: AuthenticatedUser) =>
@@ -39,6 +40,7 @@ const makeProject = (status: ProjectStatus = ProjectStatus.BERJALAN, archivedAt:
   status,
   timezone: "Asia/Makassar",
   routineHolidays: [0],
+  siteManagerId: smActor.id,
   completedAt: null,
   archivedAt,
   createdAt: now,
@@ -46,26 +48,33 @@ const makeProject = (status: ProjectStatus = ProjectStatus.BERJALAN, archivedAt:
   areas: [],
 });
 
-describe("TASK-19 Drawing In/Out & Dokumen Keluar Project (US-18, US-19, BR-32..BR-34)", () => {
+describe("TASK-19 & REV-02 Drawing (1 Arah) & Dokumen Keluar Project (US-18, US-19, BR-32..BR-34)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("[AC-18.1 / BR-32] Semua role berhak dapat melihat galeri Drawing; SUPERVISOR lintas project ditolak 403", async () => {
-    const key = `projects/${PROJ_ID}/drawings/IN/a.webp`;
-    vi.spyOn(ProjectRepository, "findById").mockResolvedValueOnce(makeProject());
+  it("[AC-18.1 / BR-32] Semua 4 role berhak dapat melihat galeri Drawing (tanpa In/Out); SUPERVISOR/SM lintas project ditolak 403", async () => {
+    const key = `projects/${PROJ_ID}/drawings/a.webp`;
+    vi.spyOn(ProjectRepository, "findById").mockResolvedValueOnce(makeProject()).mockResolvedValueOnce(makeProject());
     vi.spyOn(DrawingRepository, "findManyByProject").mockResolvedValue([
-      { id: "drw-1", projectId: PROJ_ID, direction: DrawingDirection.IN, storageKey: key, fileName: "denah.webp", mimeType: "image/webp", sizeBytes: 512000, uploadedAt: now, archivedAt: null },
+      { id: "drw-1", projectId: PROJ_ID, storageKey: key, fileName: "denah.webp", mimeType: "image/webp", sizeBytes: 512000, uploadedAt: now, archivedAt: null },
     ]);
     vi.spyOn(StorageAdapter, "createSignedViewUrlsMap").mockResolvedValue({ [key]: "https://r2.local/drw" });
 
     const supOk = await invokeApp<ApiEnvelope<Array<{ viewUrl: string }>>>(app, {
       method: "GET",
-      path: `/api/v1/projects/${PROJ_ID}/drawings?direction=IN`,
+      path: `/api/v1/projects/${PROJ_ID}/drawings`,
       headers: { Authorization: `Bearer ${makeToken(supActor)}` },
     });
     expect(supOk.status).toBe(200);
     expect(supOk.body.data?.[0]?.viewUrl).toBe("https://r2.local/drw");
+
+    const smOk = await invokeApp<ApiEnvelope<Array<{ viewUrl: string }>>>(app, {
+      method: "GET",
+      path: `/api/v1/projects/${PROJ_ID}/drawings`,
+      headers: { Authorization: `Bearer ${makeToken(smActor)}` },
+    });
+    expect(smOk.status).toBe(200);
 
     vi.spyOn(ProjectRepository, "findById")
       .mockResolvedValueOnce(null)
@@ -75,11 +84,11 @@ describe("TASK-19 Drawing In/Out & Dokumen Keluar Project (US-18, US-19, BR-32..
     ).rejects.toMatchObject({ code: "AREA_SCOPE_FORBIDDEN", statusCode: 403 });
   });
 
-  it("[AC-18.1 / BR-32, BR-33] OWNER unggah & arsip Drawing; ADMIN/SUPERVISOR ditolak 403; tipe/ukuran invalid ditolak", async () => {
-    const key = `projects/${PROJ_ID}/drawings/OUT/b.png`;
+  it("[AC-18.1 / BR-32, BR-33] OWNER unggah & arsip Drawing (tanpa direction); ADMIN/SM/SUPERVISOR ditolak 403; tipe/ukuran invalid ditolak", async () => {
+    const key = `projects/${PROJ_ID}/drawings/b.png`;
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue(makeProject());
     vi.spyOn(DrawingRepository, "create").mockResolvedValue({
-      id: "drw-2", projectId: PROJ_ID, direction: DrawingDirection.OUT, storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000, uploadedAt: now, archivedAt: null,
+      id: "drw-2", projectId: PROJ_ID, storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000, uploadedAt: now, archivedAt: null,
     });
     vi.spyOn(StorageAdapter, "createSignedViewUrl").mockResolvedValue("https://r2.local/drw-2");
 
@@ -87,16 +96,16 @@ describe("TASK-19 Drawing In/Out & Dokumen Keluar Project (US-18, US-19, BR-32..
       method: "POST",
       path: `/api/v1/projects/${PROJ_ID}/drawings`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
-      body: { direction: "OUT", storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000 },
+      body: { storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000 },
     });
     expect(ownerCreate.status).toBe(201);
 
     vi.spyOn(DrawingRepository, "findByIdWithProject").mockResolvedValue({
-      id: "drw-2", projectId: PROJ_ID, direction: DrawingDirection.OUT, storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000, uploadedAt: now, archivedAt: null,
+      id: "drw-2", projectId: PROJ_ID, storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000, uploadedAt: now, archivedAt: null,
       project: { status: ProjectStatus.BERJALAN, archivedAt: null, deletedAt: null },
     });
     vi.spyOn(DrawingRepository, "markArchived").mockResolvedValue({
-      id: "drw-2", projectId: PROJ_ID, direction: DrawingDirection.OUT, storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000, uploadedAt: now, archivedAt: now,
+      id: "drw-2", projectId: PROJ_ID, storageKey: key, fileName: "tampak.png", mimeType: "image/png", sizeBytes: 1024000, uploadedAt: now, archivedAt: now,
     });
     const archivedRes = await invokeApp<ApiEnvelope<{ archivedAt: string }>>(app, {
       method: "POST",
@@ -105,23 +114,31 @@ describe("TASK-19 Drawing In/Out & Dokumen Keluar Project (US-18, US-19, BR-32..
     });
     expect(archivedRes.status).toBe(200);
 
-    const adminPost = await invokeApp<ApiEnvelope>(app, {
-      method: "POST",
-      path: `/api/v1/projects/${PROJ_ID}/drawings`,
-      headers: { Authorization: `Bearer ${makeToken(adminActor)}` },
-      body: { direction: "IN", storageKey: key, fileName: "x.png", mimeType: "image/png", sizeBytes: 1000 },
-    });
-    expect(adminPost.status).toBe(403);
+    const [adminPost, smPost] = await Promise.all([
+      invokeApp<ApiEnvelope>(app, {
+        method: "POST",
+        path: `/api/v1/projects/${PROJ_ID}/drawings`,
+        headers: { Authorization: `Bearer ${makeToken(adminActor)}` },
+        body: { storageKey: key, fileName: "x.png", mimeType: "image/png", sizeBytes: 1000 },
+      }),
+      invokeApp<ApiEnvelope>(app, {
+        method: "POST",
+        path: `/api/v1/projects/${PROJ_ID}/drawings`,
+        headers: { Authorization: `Bearer ${makeToken(smActor)}` },
+        body: { storageKey: key, fileName: "x.png", mimeType: "image/png", sizeBytes: 1000 },
+      }),
+    ]);
+    expect([adminPost.status, smPost.status]).toEqual([403, 403]);
 
     await expect(
       DrawingService.createDrawing(ownerActor, PROJ_ID, {
-        direction: DrawingDirection.IN, storageKey: `projects/${PROJ_ID}/drawings/IN/a.pdf`, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1000,
+        storageKey: `projects/${PROJ_ID}/drawings/a.pdf`, fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1000,
       }),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_FILE_TYPE", statusCode: 400 });
 
     await expect(
       DrawingService.createDrawing(ownerActor, PROJ_ID, {
-        direction: DrawingDirection.IN, storageKey: `projects/${PROJ_ID}/drawings/IN/big.jpg`, fileName: "big.jpg", mimeType: "image/jpeg", sizeBytes: 5 * 1024 * 1024,
+        storageKey: `projects/${PROJ_ID}/drawings/big.jpg`, fileName: "big.jpg", mimeType: "image/jpeg", sizeBytes: 5 * 1024 * 1024,
       }),
     ).rejects.toMatchObject({ code: "FILE_TOO_LARGE", statusCode: 413 });
   });

@@ -9,7 +9,7 @@ drawingRouter.use(AuthMiddleware.authenticate);
 
 drawingRouter.get(
   "/",
-  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SUPERVISOR"),
+  AuthMiddleware.authorizeRoles("OWNER", "ADMIN", "SITE_MANAGER", "SUPERVISOR"),
   DrawingController.listDrawings,
 );
 

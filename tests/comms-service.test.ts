@@ -21,6 +21,7 @@ const PROJ_ID = "11111111-1111-4111-8111-111111111111";
 const now = new Date("2026-11-20T00:00:00.000Z");
 const ownerActor: AuthenticatedUser = { id: "u-owner", role: Role.OWNER, username: "owner", name: "Owner", jobTitle: "Owner" };
 const adminActor: AuthenticatedUser = { id: "u-admin", role: Role.ADMIN, username: "admin", name: "Admin", jobTitle: "Admin" };
+const smActor: AuthenticatedUser = { id: "u-sm", role: Role.SITE_MANAGER, username: "sm", name: "Site Manager", jobTitle: "Site Manager" };
 const supActor: AuthenticatedUser = { id: "u-sup", role: Role.SUPERVISOR, username: "sup", name: "Sup", jobTitle: "Supervisor" };
 
 const makeToken = (actor: AuthenticatedUser) =>
@@ -37,6 +38,7 @@ const makeProject = (status: ProjectStatus = ProjectStatus.BERJALAN, archivedAt:
   status,
   timezone: "Asia/Makassar",
   routineHolidays: [0],
+  siteManagerId: smActor.id,
   completedAt: null,
   archivedAt,
   createdAt: now,
@@ -44,33 +46,39 @@ const makeProject = (status: ProjectStatus = ProjectStatus.BERJALAN, archivedAt:
   areas: [],
 });
 
-describe("TASK-20 Comms Project — CRUD, Lampiran & RBAC (US-20, AC-20.1, BR-35)", () => {
+const makeRawEntry = (creator: AuthenticatedUser = ownerActor, overrides: Partial<{ id: string; direction: CommsDirection }> = {}) => ({
+  id: overrides.id ?? "comms-1",
+  projectId: PROJ_ID,
+  direction: overrides.direction ?? CommsDirection.INBOUND,
+  entryDate: now,
+  subject: "Konfirmasi Revisi Fasad",
+  note: "Disetujui client via email",
+  attachmentKey: `projects/${PROJ_ID}/comms-attachments/mom.pdf`,
+  attachmentName: "MoM-Revisi.pdf",
+  attachmentMime: "application/pdf",
+  attachmentBytes: 120_000,
+  createdById: creator.id,
+  updatedById: null,
+  createdBy: { id: creator.id, name: creator.name, role: creator.role },
+  updatedBy: null,
+  createdAt: now,
+  updatedAt: now,
+});
+
+describe("TASK-20 & REV-03 Comms In & Out Project — 4 Role, Audit Trail & Edit Guard (US-20, AC-20.1, BR-35)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("[AC-20.1 / BR-35] OWNER membuat, membaca (+ attachmentViewUrl), dan mengubah catatan Comms", async () => {
+  it("[AC-20.1 / BR-35] OWNER membuat, membaca (+ attachmentViewUrl & createdBy), dan mengubah catatan Comms", async () => {
     const key = `projects/${PROJ_ID}/comms-attachments/mom.pdf`;
-    const rawEntry = {
-      id: "comms-1",
-      projectId: PROJ_ID,
-      direction: CommsDirection.INBOUND,
-      entryDate: now,
-      subject: "Konfirmasi Revisi Fasad",
-      note: "Disetujui client via email",
-      attachmentKey: key,
-      attachmentName: "MoM-Revisi.pdf",
-      attachmentMime: "application/pdf",
-      attachmentBytes: 120_000,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const rawEntry = makeRawEntry(ownerActor);
 
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue(makeProject());
     vi.spyOn(CommsRepository, "create").mockResolvedValue(rawEntry);
     vi.spyOn(StorageAdapter, "createSignedViewUrl").mockResolvedValue("https://r2.local/mom");
 
-    const createRes = await invokeApp<ApiEnvelope<{ attachmentViewUrl: string }>>(app, {
+    const createRes = await invokeApp<ApiEnvelope<{ attachmentViewUrl: string; createdBy: { id: string } }>>(app, {
       method: "POST",
       path: `/api/v1/projects/${PROJ_ID}/comms`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
@@ -84,12 +92,13 @@ describe("TASK-20 Comms Project — CRUD, Lampiran & RBAC (US-20, AC-20.1, BR-35
     });
     expect(createRes.status).toBe(201);
     expect(createRes.body.data?.attachmentViewUrl).toBe("https://r2.local/mom");
+    expect(createRes.body.data?.createdBy.id).toBe(ownerActor.id);
 
     vi.spyOn(CommsRepository, "findManyByProject").mockResolvedValue([rawEntry]);
     vi.spyOn(StorageAdapter, "createSignedViewUrlsMap").mockResolvedValue({ [key]: "https://r2.local/mom-list" });
     const listRes = await invokeApp<ApiEnvelope<Array<{ attachmentViewUrl: string }>>>(app, {
       method: "GET",
-      path: `/api/v1/projects/${PROJ_ID}/comms?dateFrom=2026-11-01&dateTo=2026-11-30`,
+      path: `/api/v1/projects/${PROJ_ID}/comms?direction=INBOUND&dateFrom=2026-11-01&dateTo=2026-11-30`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
     });
     expect(listRes.status).toBe(200);
@@ -136,23 +145,64 @@ describe("TASK-20 Comms Project — CRUD, Lampiran & RBAC (US-20, AC-20.1, BR-35
     ).rejects.toMatchObject({ code: "INVALID_STORAGE_KEY", statusCode: 400 });
   });
 
-  it("[AC-20.1 / BR-35] ADMIN & SUPERVISOR ditolak 403 FORBIDDEN pada seluruh endpoint Comms", async () => {
-    const [aGet, sPost, aPatch] = await Promise.all([
-      invokeApp<ApiEnvelope>(app, { method: "GET", path: `/api/v1/projects/${PROJ_ID}/comms`, headers: { Authorization: `Bearer ${makeToken(adminActor)}` } }),
+  it("[AC-20.1 / D-05, K-02] 4 role boleh baca/buat sesuai scope; Edit hanya pembuat sendiri atau OWNER", async () => {
+    const smEntry = makeRawEntry(smActor, { id: "comms-sm" });
+    vi.spyOn(ProjectRepository, "findById").mockResolvedValue(makeProject());
+    vi.spyOn(CommsRepository, "create").mockResolvedValue(smEntry);
+    vi.spyOn(StorageAdapter, "createSignedViewUrl").mockResolvedValue("https://r2.local/sm");
+
+    const smCreate = await invokeApp<ApiEnvelope<{ createdBy: { role: string } }>>(app, {
+      method: "POST",
+      path: `/api/v1/projects/${PROJ_ID}/comms`,
+      headers: { Authorization: `Bearer ${makeToken(smActor)}` },
+      body: { entryDate: "2026-11-20", direction: "OUTBOUND", subject: "Koordinasi Logistik" },
+    });
+    expect(smCreate.status).toBe(201);
+    expect(smCreate.body.data?.createdBy.role).toBe(Role.SITE_MANAGER);
+
+    vi.spyOn(CommsRepository, "findByIdWithProject").mockResolvedValue({
+      ...smEntry,
+      project: { status: ProjectStatus.BERJALAN, archivedAt: null, deletedAt: null },
+    });
+    vi.spyOn(CommsRepository, "update").mockResolvedValue(smEntry);
+
+    // Non-creator ADMIN ditolak edit catatan milik Site Manager
+    const adminEditOther = await invokeApp<ApiEnvelope>(app, {
+      method: "PATCH",
+      path: "/api/v1/comms/comms-sm",
+      headers: { Authorization: `Bearer ${makeToken(adminActor)}` },
+      body: { subject: "Coba ubah" },
+    });
+    expect(adminEditOther.status).toBe(403);
+
+    // Pembuat sendiri (SITE_MANAGER) & OWNER diizinkan edit
+    const [smEditOwn, ownerEditAny] = await Promise.all([
       invokeApp<ApiEnvelope>(app, {
-        method: "POST",
-        path: `/api/v1/projects/${PROJ_ID}/comms`,
-        headers: { Authorization: `Bearer ${makeToken(supActor)}` },
-        body: { entryDate: "2026-11-20", direction: "INBOUND", subject: "X" },
+        method: "PATCH",
+        path: "/api/v1/comms/comms-sm",
+        headers: { Authorization: `Bearer ${makeToken(smActor)}` },
+        body: { subject: "Update SM" },
       }),
       invokeApp<ApiEnvelope>(app, {
         method: "PATCH",
-        path: "/api/v1/comms/comms-1",
-        headers: { Authorization: `Bearer ${makeToken(adminActor)}` },
-        body: { subject: "Y" },
+        path: "/api/v1/comms/comms-sm",
+        headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
+        body: { subject: "Update Owner" },
       }),
     ]);
-    expect([aGet.status, sPost.status, aPatch.status]).toEqual([403, 403, 403]);
+    expect([smEditOwn.status, ownerEditAny.status]).toEqual([200, 200]);
+
+    // SUPERVISOR di luar scope project ditolak 403 AREA_SCOPE_FORBIDDEN
+    vi.spyOn(ProjectRepository, "findById")
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makeProject());
+    const supOutScope = await invokeApp<ApiEnvelope>(app, {
+      method: "GET",
+      path: `/api/v1/projects/${PROJ_ID}/comms`,
+      headers: { Authorization: `Bearer ${makeToken(supActor)}` },
+    });
+    expect(supOutScope.status).toBe(403);
+    expect(supOutScope.body.error?.code).toBe("AREA_SCOPE_FORBIDDEN");
   });
 
   it("[BR-12 / BR-39 & Validation] Menolak mutasi pada project arsip (422) & validasi subjek/rentang tanggal invalid", async () => {

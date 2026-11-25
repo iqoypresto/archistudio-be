@@ -2,6 +2,7 @@ import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { ProjectRepository } from "../project/project.repository.js";
+import { ProjectService } from "../project/project.service.js";
 import {
   assertDrawingProjectMutable,
   assertOwnerDrawingAction,
@@ -11,26 +12,6 @@ import {
 import { DrawingRepository } from "./drawing.repository.js";
 import type { CreateDrawingDTO, DrawingItem, ListDrawingsQuery } from "./drawing.type.js";
 
-/** Memastikan role memiliki akses baca terhadap project (BR-03, BR-32, BR-40). */
-async function assertCanReadProjectDrawings(
-  actor: AuthenticatedUser,
-  projectId: string,
-): Promise<void> {
-  if (actor.role === "SUPERVISOR") {
-    const allowed = await ProjectRepository.findById(projectId, actor.id);
-    if (allowed) return;
-    const anyProject = await ProjectRepository.findById(projectId);
-    if (!anyProject) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
-    throw new ResponseError(
-      "AREA_SCOPE_FORBIDDEN",
-      "Anda hanya dapat melihat Drawing pada project yang ditugaskan kepada Anda.",
-    );
-  }
-
-  const project = await ProjectRepository.findById(projectId);
-  if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
-}
-
 export class DrawingService {
   /** Mengambil galeri Drawing project dengan signed GET URL sesuai scope role (US-18, BR-32). */
   static async listDrawings(
@@ -38,11 +19,14 @@ export class DrawingService {
     projectId: string,
     query: ListDrawingsQuery,
   ): Promise<DrawingItem[]> {
-    await assertCanReadProjectDrawings(actor, projectId);
+    await ProjectService.assertCanAccessProject(
+      actor,
+      projectId,
+      "Anda hanya dapat melihat Drawing pada project yang ditugaskan kepada Anda.",
+    );
     const includeArchived = actor.role === "OWNER" && Boolean(query.includeArchived);
     const records = await DrawingRepository.findManyByProject({
       projectId,
-      direction: query.direction,
       includeArchived,
     });
     const keys = records.map((item) => item.storageKey);
@@ -65,7 +49,6 @@ export class DrawingService {
 
     const created = await DrawingRepository.create({
       projectId,
-      direction: dto.direction,
       storageKey: dto.storageKey,
       fileName: dto.fileName,
       mimeType: dto.mimeType,

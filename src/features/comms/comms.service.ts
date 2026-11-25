@@ -2,10 +2,11 @@ import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
-import { ProjectRepository } from "../project/project.repository.js";
+import { ProjectService } from "../project/project.service.js";
 import {
+  assertCanEditComms,
   assertCommsProjectMutable,
-  assertOwnerCommsAccess,
+  assertCommsRoleAccess,
   assertValidCommsAttachment,
   formatCommsEntry,
   type RawCommsEntry,
@@ -26,15 +27,18 @@ async function hydrateSingleEntry(entry: RawCommsEntry): Promise<CommsEntryItem>
 }
 
 export class CommsService {
-  /** Mengambil daftar catatan Comms project beserta hydrated signed URL lampiran (US-20, BR-35). */
+  /** Mengambil daftar catatan Comms In/Out project sesuai scope role (US-20, BR-35, D-06, K-02). */
   static async listEntries(
     actor: AuthenticatedUser,
     projectId: string,
     query: ListCommsQuery,
   ): Promise<CommsEntryItem[]> {
-    assertOwnerCommsAccess(actor);
-    const project = await ProjectRepository.findById(projectId);
-    if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
+    assertCommsRoleAccess(actor);
+    await ProjectService.assertCanAccessProject(
+      actor,
+      projectId,
+      "Anda hanya dapat mengakses Comms pada project yang ditugaskan kepada Anda.",
+    );
 
     const records = await CommsRepository.findManyByProject({
       projectId,
@@ -53,15 +57,18 @@ export class CommsService {
     );
   }
 
-  /** Membuat catatan Comms baru oleh OWNER (US-20, AC-20.1, BR-35). */
+  /** Membuat catatan Comms baru oleh role yang diizinkan sesuai scope project (US-20, BR-35, D-05). */
   static async createEntry(
     actor: AuthenticatedUser,
     projectId: string,
     dto: CreateCommsDTO,
   ): Promise<CommsEntryItem> {
-    assertOwnerCommsAccess(actor);
-    const project = await ProjectRepository.findById(projectId);
-    if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
+    assertCommsRoleAccess(actor);
+    const project = await ProjectService.assertCanAccessProject(
+      actor,
+      projectId,
+      "Anda hanya dapat menambahkan Comms pada project yang ditugaskan kepada Anda.",
+    );
     assertCommsProjectMutable(project);
     assertValidCommsAttachment(projectId, dto.attachment);
 
@@ -75,21 +82,28 @@ export class CommsService {
       attachmentName: dto.attachment?.fileName ?? null,
       attachmentMime: dto.attachment?.mimeType ?? null,
       attachmentBytes: dto.attachment?.sizeBytes ?? null,
+      createdById: actor.id,
     });
     return hydrateSingleEntry(created);
   }
 
-  /** Memperbarui catatan Comms oleh OWNER (US-20, BR-35). */
+  /** Memperbarui catatan Comms: hanya pembuat sendiri atau OWNER (US-20, BR-35, D-05). */
   static async updateEntry(
     actor: AuthenticatedUser,
     commsId: string,
     dto: UpdateCommsDTO,
   ): Promise<CommsEntryItem> {
-    assertOwnerCommsAccess(actor);
+    assertCommsRoleAccess(actor);
     const existing = await CommsRepository.findByIdWithProject(commsId);
     if (!existing || existing.project.deletedAt != null) {
       throw new ResponseError("RESOURCE_NOT_FOUND", "Catatan Comms tidak ditemukan.");
     }
+    await ProjectService.assertCanAccessProject(
+      actor,
+      existing.projectId,
+      "Anda hanya dapat mengubah Comms pada project yang ditugaskan kepada Anda.",
+    );
+    assertCanEditComms(actor, existing.createdById);
     assertCommsProjectMutable(existing.project);
     assertValidCommsAttachment(existing.projectId, dto.attachment);
 
@@ -104,6 +118,7 @@ export class CommsService {
         attachmentMime: dto.attachment?.mimeType ?? null,
         attachmentBytes: dto.attachment?.sizeBytes ?? null,
       }),
+      updatedBy: { connect: { id: actor.id } },
     });
     return hydrateSingleEntry(updated);
   }

@@ -78,7 +78,10 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       areaId: AREA_ID,
       supervisorId: "sup-lain",
       photos: [],
-      area: { assignments: [{ supervisorId: "sup-lain" }] },
+      area: {
+        project: { siteManagerId: null },
+        assignments: [{ supervisorId: "sup-lain" }],
+      },
     });
     const viewRes = await invokeApp<ApiEnvelope>(app, {
       method: "POST",
@@ -112,7 +115,7 @@ describe("TASK-06 Upload R2 & Progressive Lock", () => {
       method: "POST",
       path: "/api/v1/uploads/sign",
       headers: supHeader("sup-1"),
-      body: { areaId: AREA_ID, reportDate: "2026-11-16", files: [] },
+      body: { areaId: AREA_ID, sessionId: SESSION_ID, reportDate: "2026-11-16", files: [] },
     });
     expect(emptyRes.status).toBe(400);
     expect(emptyRes.body.error?.code).toBe("INVALID_PHOTO_COUNT");
