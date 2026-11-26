@@ -1,5 +1,5 @@
 export interface PdfPhotoItem {
-  storageKey: string;
+  storedFileId: string;
   caption: string | null;
   sortOrder: number;
   takenAt: string | null;

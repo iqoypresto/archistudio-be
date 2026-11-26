@@ -21,10 +21,7 @@ export class DrawingValidation {
 
   static readonly BODY = {
     create: z.object({
-      storageKey: z.string().trim().min(1, "Kunci file Drawing wajib diisi.").max(500),
-      fileName: z.string().trim().min(1, "Nama file Drawing wajib diisi.").max(255),
-      mimeType: z.string().trim().min(1, "Tipe file Drawing wajib diisi.").max(100),
-      sizeBytes: z.number().int().positive("Ukuran file Drawing harus lebih dari 0 byte."),
+      storedFileId: z.string().uuid("ID file Drawing tidak valid."),
     }),
   };
 }

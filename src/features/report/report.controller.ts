@@ -8,6 +8,7 @@ import { ReportService } from "./report.service.js";
 import { ReportDirectService } from "./report-direct.service.js";
 import { ReportReadService } from "./report-read.service.js";
 import { ReportUploadSessionService } from "./report-upload-session.service.js";
+import { DriveStorageCleanupService } from "../upload/drive-storage-cleanup.service.js";
 import { createReportUploadSessionSchema } from "./report-upload-session.validation.js";
 import { ReportUnlockService } from "./report-unlock.service.js";
 import {
@@ -72,7 +73,16 @@ export class ReportController {
   }
 
   static async cleanupUploadSessions(_req: Request, res: Response): Promise<void> {
-    const result = await ReportUploadSessionService.cleanupExpired();
+    const [reportResult, driveResult] = await Promise.all([
+      ReportUploadSessionService.cleanupExpired(),
+      DriveStorageCleanupService.cleanupExpiredAndPending(),
+    ]);
+    const result = {
+      sessions: reportResult.sessions,
+      photosDeleted: reportResult.photosDeleted,
+      filesDeleted: driveResult.filesDeleted,
+      failures: reportResult.failures + driveResult.failures,
+    };
     ResponseHelper.ok(res, COMMON_MESSAGES.UPDATED, result);
   }
 

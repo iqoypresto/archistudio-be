@@ -1,6 +1,9 @@
 import type { AuthenticatedUser } from "../../types/express.js";
+import { logger } from "../../configs/logger.config.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
+import { cancelDriveUploadSession } from "../../utils/storage/drive-upload.adapter.js";
+import { deleteDriveFile } from "../../utils/storage/drive-file.adapter.js";
+import { decryptDriveSessionUri } from "../../utils/storage/drive-session.crypto.js";
 import { ReportUploadSessionRepository } from "./report-upload-session.repository.js";
 import { ReportRepository } from "./report.repository.js";
 import { assertAssignmentOnDate } from "./report.guard.js";
@@ -41,12 +44,17 @@ export class ReportUploadSessionService {
     let failures = 0;
     for (const batch of batches) {
       let batchFailures = 0;
-      for (const [index, key] of batch.keys.entries()) {
+      for (const photo of batch.photos) {
         try {
-          await StorageAdapter.deleteObject(key);
-          await ReportUploadSessionRepository.markPhotoDeleted(batch.photoIds[index]!);
+          const file = photo.storedFile;
+          const sessionUri = file.uploadSession?.sessionUriCiphertext;
+          if (sessionUri) await cancelDriveUploadSession(decryptDriveSessionUri(sessionUri));
+          if (file.driveFileId) await deleteDriveFile(file.driveFileId);
+          await ReportUploadSessionRepository.markPhotoDeleted(photo.id, file.id);
           photosDeleted += 1;
-        } catch {
+        } catch (error) {
+          await ReportUploadSessionRepository.markFileDeletePending(photo.storedFile.id);
+          logger.warn("Expired report photo cleanup is pending", { storedFileId: photo.storedFile.id, error });
           failures += 1;
           batchFailures += 1;
         }

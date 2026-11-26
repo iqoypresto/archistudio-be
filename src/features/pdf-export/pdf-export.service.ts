@@ -2,8 +2,8 @@ import { fetchProjectAndAreas } from "./pdf-export.repository.js";
 import { ReportArchiveService } from "../report/report-archive.service.js";
 import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { loadPdfMake } from "../../utils/pdf/pdfmake.loader.js";
+import { toPdfPhotoDataUrl } from "./pdf-photo.helper.js";
 import { buildTemplateADefinition } from "./pdf-export.template-a.js";
 import { findMissingReportAreas } from "./pdf-export.helper.js";
 import type { PdfAreaReportData, PdfDocumentData, PdfPhotoItem } from "./pdf-export.type.js";
@@ -11,21 +11,12 @@ import type { PdfAreaReportData, PdfDocumentData, PdfPhotoItem } from "./pdf-exp
 type AreaWithReports = NonNullable<Awaited<ReturnType<typeof fetchProjectAndAreas>>>["areas"][number];
 
 
-async function resolvePhotoDataUrl(storageKey: string): Promise<string | null> {
-  try {
-    const buffer = await StorageAdapter.getObjectBuffer(storageKey);
-    return `data:image/jpeg;base64,${buffer.toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
-
-async function mapAreaPhotos(photos: { storageKey: string; caption: string | null; sortOrder: number; takenAt: Date | null }[]): Promise<PdfPhotoItem[]> {
+async function mapAreaPhotos(photos: { storedFile: { id: string; driveFileId: string | null; mimeType: string; sizeBytes: number }; caption: string | null; sortOrder: number; takenAt: Date | null }[]): Promise<PdfPhotoItem[]> {
   const items: PdfPhotoItem[] = [];
   for (const p of photos) {
-    const dataUrl = await resolvePhotoDataUrl(p.storageKey);
+    const dataUrl = await toPdfPhotoDataUrl(p.storedFile);
     items.push({
-      storageKey: p.storageKey,
+      storedFileId: p.storedFile.id,
       caption: p.caption,
       sortOrder: p.sortOrder,
       takenAt: p.takenAt ? p.takenAt.toISOString() : null,

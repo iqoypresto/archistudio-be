@@ -7,11 +7,11 @@ export type CreateDrawingDTO = z.infer<typeof DrawingValidation.BODY.create>;
 export interface DrawingItem {
   id: string;
   projectId: string;
-  storageKey: string;
+  storedFileId: string;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  uploadedAt: Date;
+  uploadedAt: Date | null;
   archivedAt: Date | null;
-  viewUrl: string;
+  contentPath: string;
 }

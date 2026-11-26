@@ -1,17 +1,8 @@
-import { CommsDirection, Prisma, ProjectStatus } from "@prisma/client";
+import { Prisma, ProjectStatus } from "@prisma/client";
 import { canEditCommsEntry, isCommsAllowedRole } from "../../helpers/access-policy.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import type { CommsAttachmentInput, CommsEntryItem } from "./comms.type.js";
-
-export const ALLOWED_COMMS_ATTACHMENT_MIMES = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-]);
-export const MAX_COMMS_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+import type { CommsEntryItem } from "./comms.type.js";
 
 export const COMMS_MESSAGES = {
   LIST_FETCHED: "Daftar catatan Comms berhasil diambil.",
@@ -26,10 +17,8 @@ export const commsSelect = Prisma.validator<Prisma.CommsEntrySelect>()({
   entryDate: true,
   subject: true,
   note: true,
-  attachmentKey: true,
-  attachmentName: true,
-  attachmentMime: true,
-  attachmentBytes: true,
+  attachmentStoredFileId: true,
+  attachment: { select: { fileName: true, mimeType: true, sizeBytes: true } },
   createdById: true,
   updatedById: true,
   createdBy: { select: { id: true, name: true, role: true } },
@@ -84,46 +73,21 @@ export function assertCommsProjectMutable(project: {
   }
 }
 
-/** Memvalidasi lampiran opsional Comms (PDF/Word/Excel, maks. 5 MB, prefix valid) (BR-35). */
-export function assertValidCommsAttachment(
-  projectId: string,
-  attachment?: CommsAttachmentInput | null,
-): void {
-  if (!attachment) return;
-  if (!ALLOWED_COMMS_ATTACHMENT_MIMES.has(attachment.mimeType)) {
-    throw new ResponseError(
-      "UNSUPPORTED_FILE_TYPE",
-      "Lampiran Comms hanya mendukung format PDF, Word, atau Excel (BR-35).",
-    );
-  }
-  if (attachment.sizeBytes > MAX_COMMS_ATTACHMENT_BYTES) {
-    throw new ResponseError(
-      "FILE_TOO_LARGE",
-      "Ukuran lampiran Comms maksimal 5 MB per file (BR-35).",
-    );
-  }
-  const expectedPrefix = `projects/${projectId}/comms-attachments/`;
-  if (!attachment.storageKey.startsWith(expectedPrefix) || attachment.storageKey.includes("..")) {
-    throw new ResponseError("INVALID_STORAGE_KEY", "Referensi file lampiran Comms tidak valid.");
-  }
-}
-
-export function formatCommsEntry(
-  raw: RawCommsEntry,
-  attachmentViewUrl: string | null,
-): CommsEntryItem {
+export function formatCommsEntry(raw: RawCommsEntry): CommsEntryItem {
   return {
     id: raw.id,
     projectId: raw.projectId,
-    direction: raw.direction as CommsDirection,
+    direction: raw.direction,
     entryDate: raw.entryDate.toISOString().slice(0, 10),
     subject: raw.subject,
     note: raw.note,
-    attachmentKey: raw.attachmentKey,
-    attachmentName: raw.attachmentName,
-    attachmentMime: raw.attachmentMime,
-    attachmentBytes: raw.attachmentBytes,
-    attachmentViewUrl,
+    attachmentStoredFileId: raw.attachmentStoredFileId,
+    attachmentName: raw.attachment?.fileName ?? null,
+    attachmentMime: raw.attachment?.mimeType ?? null,
+    attachmentBytes: raw.attachment?.sizeBytes ?? null,
+    attachmentContentPath: raw.attachmentStoredFileId
+      ? `/files/${raw.attachmentStoredFileId}/content`
+      : null,
     createdBy: raw.createdBy,
     updatedBy: raw.updatedBy ?? null,
     createdAt: raw.createdAt,

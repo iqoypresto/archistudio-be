@@ -1,11 +1,13 @@
+import { StoragePurpose, StorageTargetType } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.d.js";
+import { logger } from "../../configs/logger.config.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
+import { deleteDriveFile } from "../../utils/storage/drive-file.adapter.js";
 import { ProjectRepository } from "../project/project.repository.js";
+import { StoredFileService } from "../upload/stored-file.service.js";
 import {
   assertDocumentProjectMutable,
   assertOwnerDocumentAccess,
-  assertValidProjectDocumentFile,
   formatProjectDocumentItem,
 } from "./project-document.helper.js";
 import { ProjectDocumentRepository } from "./project-document.repository.js";
@@ -16,7 +18,7 @@ import type {
 } from "./project-document.type.js";
 
 export class ProjectDocumentService {
-  /** Mengambil daftar dokumen keluar project dengan signed GET/download URL (US-19, BR-34). */
+  /** Mengambil daftar dokumen keluar project dengan path konten privat (US-19, BR-34). */
   static async listDocuments(
     actor: AuthenticatedUser,
     projectId: string,
@@ -30,10 +32,7 @@ export class ProjectDocumentService {
       projectId,
       type: query.type,
     });
-    const keys = records.map((item) => item.storageKey);
-    const urlMap = keys.length > 0 ? await StorageAdapter.createSignedViewUrlsMap(keys) : {};
-
-    return records.map((item) => formatProjectDocumentItem(item, urlMap[item.storageKey] ?? ""));
+    return records.map(formatProjectDocumentItem);
   }
 
   /** Menyimpan file dokumen keluar (Quotation, BAST, Invoice) oleh OWNER (US-19, AC-19.1, BR-34). */
@@ -46,18 +45,18 @@ export class ProjectDocumentService {
     const project = await ProjectRepository.findById(projectId);
     if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
     assertDocumentProjectMutable(project);
-    assertValidProjectDocumentFile(projectId, dto);
+    await StoredFileService.assertAttachable({
+      storedFileId: dto.storedFileId, purpose: StoragePurpose.PROJECT_DOCUMENT,
+      targetType: StorageTargetType.PROJECT, targetId: projectId,
+      targetQualifier: dto.type, uploadedById: actor.id,
+    });
 
     const created = await ProjectDocumentRepository.create({
       projectId,
       type: dto.type,
-      storageKey: dto.storageKey,
-      fileName: dto.fileName,
-      mimeType: dto.mimeType,
-      sizeBytes: dto.sizeBytes,
+      storedFileId: dto.storedFileId,
     });
-    const viewUrl = await StorageAdapter.createSignedViewUrl(created.storageKey);
-    return formatProjectDocumentItem(created, viewUrl);
+    return formatProjectDocumentItem(created);
   }
 
   /** Menghapus permanen dokumen keluar (objek storage + record DB) oleh OWNER (US-19, AC-19.1, BR-34). */
@@ -72,8 +71,13 @@ export class ProjectDocumentService {
     }
     assertDocumentProjectMutable(existing.project);
 
-    await StorageAdapter.deleteObject(existing.storageKey);
-    await ProjectDocumentRepository.deleteById(documentId);
+    const storedFileId = await ProjectDocumentRepository.deleteAndQueueFile(documentId);
+    try {
+      if (existing.storedFile.driveFileId) await deleteDriveFile(existing.storedFile.driveFileId);
+      await ProjectDocumentRepository.markFileDeleted(storedFileId);
+    } catch (error) {
+      logger.warn("Project document Drive cleanup is pending", { storedFileId, error });
+    }
     return { id: documentId, deleted: true };
   }
 }

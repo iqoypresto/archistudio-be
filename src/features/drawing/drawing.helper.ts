@@ -1,10 +1,7 @@
 import { Prisma, ProjectStatus } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import type { CreateDrawingDTO, DrawingItem } from "./drawing.type.js";
-
-export const ALLOWED_DRAWING_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
-export const MAX_DRAWING_BYTES = 4 * 1024 * 1024;
+import type { DrawingItem } from "./drawing.type.js";
 
 export const DRAWING_MESSAGES = {
   LIST_FETCHED: "Galeri Drawing berhasil diambil.",
@@ -15,11 +12,8 @@ export const DRAWING_MESSAGES = {
 export const drawingSelect = Prisma.validator<Prisma.DrawingSelect>()({
   id: true,
   projectId: true,
-  storageKey: true,
-  fileName: true,
-  mimeType: true,
-  sizeBytes: true,
-  uploadedAt: true,
+  storedFileId: true,
+  storedFile: { select: { fileName: true, mimeType: true, sizeBytes: true, uploadedAt: true } },
   archivedAt: true,
 });
 
@@ -59,36 +53,16 @@ export function assertDrawingProjectMutable(project: {
   }
 }
 
-/** Memvalidasi format JPG/PNG/WebP, ukuran <= 4 MB, dan prefix storageKey Drawing (BR-33). */
-export function assertValidDrawingFile(projectId: string, dto: CreateDrawingDTO): void {
-  if (!ALLOWED_DRAWING_MIMES.has(dto.mimeType)) {
-    throw new ResponseError(
-      "UNSUPPORTED_FILE_TYPE",
-      "Drawing hanya mendukung gambar JPG, PNG, atau WebP (BR-33).",
-    );
-  }
-  if (dto.sizeBytes > MAX_DRAWING_BYTES) {
-    throw new ResponseError(
-      "FILE_TOO_LARGE",
-      "Ukuran Drawing setelah kompresi maksimal 4 MB. Pilih gambar lain (BR-33).",
-    );
-  }
-  const expectedPrefix = `projects/${projectId}/drawings/`;
-  if (!dto.storageKey.startsWith(expectedPrefix) || dto.storageKey.includes("..")) {
-    throw new ResponseError("INVALID_STORAGE_KEY", "Referensi file Drawing tidak valid.");
-  }
-}
-
-export function formatDrawingItem(raw: RawDrawingRecord, viewUrl: string): DrawingItem {
+export function formatDrawingItem(raw: RawDrawingRecord): DrawingItem {
   return {
     id: raw.id,
     projectId: raw.projectId,
-    storageKey: raw.storageKey,
-    fileName: raw.fileName,
-    mimeType: raw.mimeType,
-    sizeBytes: raw.sizeBytes,
-    uploadedAt: raw.uploadedAt,
+    storedFileId: raw.storedFileId,
+    fileName: raw.storedFile.fileName,
+    mimeType: raw.storedFile.mimeType,
+    sizeBytes: raw.storedFile.sizeBytes,
+    uploadedAt: raw.storedFile.uploadedAt,
     archivedAt: raw.archivedAt,
-    viewUrl,
+    contentPath: `/files/${raw.storedFileId}/content`,
   };
 }

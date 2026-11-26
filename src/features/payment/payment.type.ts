@@ -9,10 +9,7 @@ export type CreatePaymentRecordDTO = z.infer<typeof PaymentValidation.BODY.creat
 export type UpdatePaymentRecordDTO = z.infer<typeof PaymentValidation.BODY.updateRecord>;
 
 export interface PaymentProofInput {
-  storageKey: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
+  storedFileId: string;
 }
 
 export interface PaymentPayeeItem {
@@ -39,11 +36,11 @@ export interface PaymentRecordItem {
   amount: number;
   recordDate: string;
   dueDate: string | null;
-  proofStorageKey: string | null;
+  proofStoredFileId: string | null;
   proofFileName: string | null;
   proofMimeType: string | null;
   proofSizeBytes: number | null;
-  proofViewUrl: string | null;
+  proofContentPath: string | null;
   createdById: string;
   createdAt: Date;
   updatedAt: Date;

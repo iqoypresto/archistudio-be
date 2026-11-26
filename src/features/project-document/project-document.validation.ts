@@ -20,10 +20,7 @@ export class ProjectDocumentValidation {
   static readonly BODY = {
     create: z.object({
       type: z.nativeEnum(ProjectDocumentType),
-      storageKey: z.string().trim().min(1, "Kunci file dokumen wajib diisi.").max(500),
-      fileName: z.string().trim().min(1, "Nama file asli wajib diisi.").max(255),
-      mimeType: z.string().trim().min(1, "Tipe file dokumen wajib diisi.").max(150),
-      sizeBytes: z.number().int().positive("Ukuran file dokumen harus lebih dari 0 byte."),
+      storedFileId: z.string().uuid("ID file dokumen tidak valid."),
     }),
   };
 }
