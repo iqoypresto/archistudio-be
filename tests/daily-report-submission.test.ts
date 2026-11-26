@@ -1,9 +1,8 @@
-import { ReportStatus } from "@prisma/client";
+import { ReportStatus, StoragePurpose, StorageTargetType, StoredFileStatus, UploadSessionPhotoStatus } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.js";
 import { ReportRepository } from "../src/features/report/report.repository.js";
 import { ReportUploadSessionRepository } from "../src/features/report/report-upload-session.repository.js";
-import * as storageAdapter from "../src/utils/storage/storage.adapter.js";
 import { invokeApp } from "./helpers/invoke-app.helper.js";
 import {
   makeReportRecord,
@@ -11,6 +10,7 @@ import {
   TEST_AREA_ID,
   TEST_PROJECT_ID,
   TEST_REPORT_ID,
+  TEST_STORED_FILE_ID,
 } from "./helpers/report-fixture.helper.js";
 
 vi.mock("../src/configs/prisma-client.config.js", () => ({ prisma: {} }));
@@ -25,7 +25,6 @@ interface ApiEnvelope<T = Record<string, unknown>> {
 }
 
 const SESSION_ID = "55555555-5555-4555-8555-555555555555";
-const PHOTO_KEY = `projects/${TEST_PROJECT_ID}/areas/${TEST_AREA_ID}/2026-11-16/sup-1/${SESSION_ID}/photo-1.jpg`;
 
 function reportBody() {
   return {
@@ -37,7 +36,7 @@ function reportBody() {
     tomorrowPlanText: "Lanjut pemasangan kolom",
     weather: "CERAH",
     workerCount: 12,
-    photos: [{ storageKey: PHOTO_KEY, caption: "Sloof", sortOrder: 0 }],
+    photos: [{ storedFileId: TEST_STORED_FILE_ID, caption: "Sloof", sortOrder: 0 }],
     sessionId: SESSION_ID,
   };
 }
@@ -57,17 +56,21 @@ function mockValidSubmit() {
   vi.spyOn(ReportUploadSessionRepository, "claimForFinalizing").mockResolvedValue(true);
   vi.spyOn(ReportUploadSessionRepository, "findOwned").mockResolvedValue({
     id: SESSION_ID, areaId: TEST_AREA_ID, reportDate: new Date("2026-11-16T00:00:00.000Z"),
-    photos: [{ storageKey: PHOTO_KEY }],
+    photos: [{
+      status: UploadSessionPhotoStatus.PENDING,
+      storedFileId: TEST_STORED_FILE_ID,
+      storedFile: {
+        status: StoredFileStatus.READY,
+        uploadedById: "sup-1",
+        purpose: StoragePurpose.REPORT_PHOTO,
+        targetType: StorageTargetType.REPORT_UPLOAD_SESSION,
+        targetId: SESSION_ID,
+      },
+    }],
   } as never);
   vi.spyOn(ReportUploadSessionRepository, "finalizeAndCreateReport").mockResolvedValue(
     makeReportRecord({ status: ReportStatus.SUBMITTED }) as never,
   );
-  vi.spyOn(storageAdapter.StorageAdapter, "getObjectLastModified").mockResolvedValue({
-    exists: true, lastModified: new Date("2026-11-16T09:30:00.000Z"),
-  });
-  vi.spyOn(storageAdapter, "createSignedViewUrlsMap").mockResolvedValue({
-    [PHOTO_KEY]: "https://r2/view",
-  });
 }
 
 describe("Supervisor report direct submission", () => {

@@ -4,9 +4,12 @@ import { app } from "../src/app.js";
 import { CommsRepository } from "../src/features/comms/comms.repository.js";
 import { CommsService } from "../src/features/comms/comms.service.js";
 import { ProjectRepository } from "../src/features/project/project.repository.js";
+import { StoredFileRepository } from "../src/features/upload/stored-file.repository.js";
+import { StoredFileService } from "../src/features/upload/stored-file.service.js";
+import { UploadRepository } from "../src/features/upload/upload.repository.js";
+import { UploadService } from "../src/features/upload/upload.service.js";
 import type { AuthenticatedUser } from "../src/types/express.d.js";
 import { signAccessToken } from "../src/utils/auth/jwt.util.js";
-import { StorageAdapter } from "../src/utils/storage/storage.adapter.js";
 import { invokeApp } from "./helpers/invoke-app.helper.js";
 
 vi.mock("../src/configs/prisma-client.config.js", () => ({ prisma: {} }));
@@ -18,6 +21,7 @@ interface ApiEnvelope<T = unknown> {
 }
 
 const PROJ_ID = "11111111-1111-4111-8111-111111111111";
+const FILE_ID = "33333333-3333-4333-8333-333333333333";
 const now = new Date("2026-11-20T00:00:00.000Z");
 const ownerActor: AuthenticatedUser = { id: "u-owner", role: Role.OWNER, username: "owner", name: "Owner", jobTitle: "Owner" };
 const adminActor: AuthenticatedUser = { id: "u-admin", role: Role.ADMIN, username: "admin", name: "Admin", jobTitle: "Admin" };
@@ -53,10 +57,12 @@ const makeRawEntry = (creator: AuthenticatedUser = ownerActor, overrides: Partia
   entryDate: now,
   subject: "Konfirmasi Revisi Fasad",
   note: "Disetujui client via email",
-  attachmentKey: `projects/${PROJ_ID}/comms-attachments/mom.pdf`,
-  attachmentName: "MoM-Revisi.pdf",
-  attachmentMime: "application/pdf",
-  attachmentBytes: 120_000,
+  attachmentStoredFileId: FILE_ID,
+  attachment: {
+    fileName: "MoM-Revisi.pdf",
+    mimeType: "application/pdf",
+    sizeBytes: 120_000,
+  },
   createdById: creator.id,
   updatedById: null,
   createdBy: { id: creator.id, name: creator.name, role: creator.role },
@@ -70,15 +76,14 @@ describe("TASK-20 & REV-03 Comms In & Out Project — 4 Role, Audit Trail & Edit
     vi.restoreAllMocks();
   });
 
-  it("[AC-20.1 / BR-35] OWNER membuat, membaca (+ attachmentViewUrl & createdBy), dan mengubah catatan Comms", async () => {
-    const key = `projects/${PROJ_ID}/comms-attachments/mom.pdf`;
+  it("[AC-20.1 / BR-35] OWNER membuat, membaca (+ attachmentContentPath & createdBy), dan mengubah catatan Comms", async () => {
     const rawEntry = makeRawEntry(ownerActor);
 
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue(makeProject());
+    vi.spyOn(StoredFileService, "assertAttachable").mockResolvedValue();
     vi.spyOn(CommsRepository, "create").mockResolvedValue(rawEntry);
-    vi.spyOn(StorageAdapter, "createSignedViewUrl").mockResolvedValue("https://r2.local/mom");
 
-    const createRes = await invokeApp<ApiEnvelope<{ attachmentViewUrl: string; createdBy: { id: string } }>>(app, {
+    const createRes = await invokeApp<ApiEnvelope<{ attachmentContentPath: string; createdBy: { id: string } }>>(app, {
       method: "POST",
       path: `/api/v1/projects/${PROJ_ID}/comms`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
@@ -87,22 +92,21 @@ describe("TASK-20 & REV-03 Comms In & Out Project — 4 Role, Audit Trail & Edit
         direction: "INBOUND",
         subject: "Konfirmasi Revisi Fasad",
         note: "Disetujui client via email",
-        attachment: { storageKey: key, fileName: "MoM-Revisi.pdf", mimeType: "application/pdf", sizeBytes: 120_000 },
+        attachment: { storedFileId: FILE_ID },
       },
     });
     expect(createRes.status).toBe(201);
-    expect(createRes.body.data?.attachmentViewUrl).toBe("https://r2.local/mom");
+    expect(createRes.body.data?.attachmentContentPath).toBe(`/files/${FILE_ID}/content`);
     expect(createRes.body.data?.createdBy.id).toBe(ownerActor.id);
 
     vi.spyOn(CommsRepository, "findManyByProject").mockResolvedValue([rawEntry]);
-    vi.spyOn(StorageAdapter, "createSignedViewUrlsMap").mockResolvedValue({ [key]: "https://r2.local/mom-list" });
-    const listRes = await invokeApp<ApiEnvelope<Array<{ attachmentViewUrl: string }>>>(app, {
+    const listRes = await invokeApp<ApiEnvelope<Array<{ attachmentContentPath: string }>>>(app, {
       method: "GET",
       path: `/api/v1/projects/${PROJ_ID}/comms?direction=INBOUND&dateFrom=2026-11-01&dateTo=2026-11-30`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
     });
     expect(listRes.status).toBe(200);
-    expect(listRes.body.data?.[0]?.attachmentViewUrl).toBe("https://r2.local/mom-list");
+    expect(listRes.body.data?.[0]?.attachmentContentPath).toBe(`/files/${FILE_ID}/content`);
 
     vi.spyOn(CommsRepository, "findByIdWithProject").mockResolvedValue({
       ...rawEntry,
@@ -119,37 +123,47 @@ describe("TASK-20 & REV-03 Comms In & Out Project — 4 Role, Audit Trail & Edit
     expect(patchRes.body.data?.direction).toBe("OUTBOUND");
   });
 
-  it("[AC-20.1 / BR-35] Menolak lampiran non-PDF/Word/Excel (400), > 5 MB (413), dan storageKey invalid (400)", async () => {
+  it("[AC-20.1 / BR-35] Menolak lampiran non-PDF/Word/Excel (400), > 5 MB (413), dan referensi file invalid (400)", async () => {
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue(makeProject());
-    const base = { entryDate: "2026-11-20", direction: CommsDirection.OUTBOUND, subject: "Surat" };
+    vi.spyOn(UploadRepository, "projectAcceptsFiles").mockResolvedValue(true);
 
     await expect(
-      CommsService.createEntry(ownerActor, PROJ_ID, {
-        ...base,
-        attachment: { storageKey: `projects/${PROJ_ID}/comms-attachments/a.png`, fileName: "a.png", mimeType: "image/png", sizeBytes: 1000 },
-      }),
+      UploadService.createSession(
+        {
+          purpose: "comms-attachment",
+          projectId: PROJ_ID,
+          file: { fileName: "a.png", contentType: "image/png", fileSizeBytes: 1000 },
+        },
+        ownerActor,
+      ),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_FILE_TYPE", statusCode: 400 });
 
     await expect(
-      CommsService.createEntry(ownerActor, PROJ_ID, {
-        ...base,
-        attachment: { storageKey: `projects/${PROJ_ID}/comms-attachments/big.pdf`, fileName: "big.pdf", mimeType: "application/pdf", sizeBytes: 6 * 1024 * 1024 },
-      }),
+      UploadService.createSession(
+        {
+          purpose: "comms-attachment",
+          projectId: PROJ_ID,
+          file: { fileName: "big.pdf", contentType: "application/pdf", fileSizeBytes: 6 * 1024 * 1024 },
+        },
+        ownerActor,
+      ),
     ).rejects.toMatchObject({ code: "FILE_TOO_LARGE", statusCode: 413 });
 
+    vi.spyOn(StoredFileRepository, "findById").mockResolvedValue(null);
     await expect(
       CommsService.createEntry(ownerActor, PROJ_ID, {
-        ...base,
-        attachment: { storageKey: "projects/other/comms-attachments/a.pdf", fileName: "a.pdf", mimeType: "application/pdf", sizeBytes: 1000 },
+        entryDate: "2026-11-20",
+        direction: CommsDirection.OUTBOUND,
+        subject: "Surat",
+        attachment: { storedFileId: FILE_ID },
       }),
-    ).rejects.toMatchObject({ code: "INVALID_STORAGE_KEY", statusCode: 400 });
+    ).rejects.toMatchObject({ code: "INVALID_FILE_REFERENCE", statusCode: 400 });
   });
 
   it("[AC-20.1 / D-05, K-02] 4 role boleh baca/buat sesuai scope; Edit hanya pembuat sendiri atau OWNER", async () => {
     const smEntry = makeRawEntry(smActor, { id: "comms-sm" });
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue(makeProject());
     vi.spyOn(CommsRepository, "create").mockResolvedValue(smEntry);
-    vi.spyOn(StorageAdapter, "createSignedViewUrl").mockResolvedValue("https://r2.local/sm");
 
     const smCreate = await invokeApp<ApiEnvelope<{ createdBy: { role: string } }>>(app, {
       method: "POST",

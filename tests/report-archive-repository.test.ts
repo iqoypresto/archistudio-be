@@ -3,7 +3,7 @@ import { prisma } from "../src/configs/prisma-client.config.js";
 import { ReportArchiveService } from "../src/features/report/report-archive.service.js";
 import { ReportRepository } from "../src/features/report/report.repository.js";
 import { REPORT_DETAIL_INCLUDE } from "../src/features/report/report.prisma.js";
-import { UploadRepository } from "../src/features/upload/upload.repository.js";
+import { FileRepository } from "../src/features/upload/file.repository.js";
 import { DashboardRepository } from "../src/features/dashboard/dashboard.repository.js";
 import { fetchProjectAndAreas } from "../src/features/pdf-export/pdf-export.repository.js";
 
@@ -11,6 +11,7 @@ vi.mock("../src/configs/prisma-client.config.js", () => ({ prisma: {
   project: { findMany: vi.fn(), findFirst: vi.fn() },
   area: { findFirst: vi.fn() },
   dailyReport: { updateMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
+  storedFile: { findUnique: vi.fn() },
 } }));
 
 describe("BR-25 — kondisi atomik dan pembaca data historis", () => {
@@ -52,10 +53,12 @@ describe("BR-25 — kondisi atomik dan pembaca data historis", () => {
 
   it("detail/foto, kewajiban laporan, rekap, dan PDF tidak menyembunyikan arsip", async () => {
     await ReportRepository.findReportDetailById("historical");
-    await UploadRepository.findReportWithPhotosAndScope("historical");
+    await FileRepository.findById("historical");
     for (const [args] of vi.mocked(prisma.dailyReport.findFirst).mock.calls) {
       expect(args?.where).not.toHaveProperty("archivedAt");
     }
+    const fileQuery = JSON.stringify(vi.mocked(prisma.storedFile.findUnique).mock.calls[0]?.[0]);
+    expect(fileQuery).not.toContain("archivedAt");
     await ReportRepository.findAreaContextForSubmit("area-a");
     const context = vi.mocked(prisma.area.findFirst).mock.calls[0]?.[0];
     expect(context?.select?.reports).not.toHaveProperty("where.archivedAt");

@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.js";
 import { PaymentRepository } from "../src/features/payment/payment.repository.js";
 import { PaymentService } from "../src/features/payment/payment.service.js";
+import { StoredFileRepository } from "../src/features/upload/stored-file.repository.js";
+import { StoredFileService } from "../src/features/upload/stored-file.service.js";
+import { UploadRepository } from "../src/features/upload/upload.repository.js";
+import { UploadService } from "../src/features/upload/upload.service.js";
 import type { AuthenticatedUser } from "../src/types/express.d.js";
 import { signAccessToken } from "../src/utils/auth/jwt.util.js";
-import { StorageAdapter } from "../src/utils/storage/storage.adapter.js";
 import { invokeApp } from "./helpers/invoke-app.helper.js";
 
 vi.mock("../src/configs/prisma-client.config.js", () => ({ prisma: {} }));
@@ -18,6 +21,7 @@ interface ApiEnvelope<T = unknown> {
 
 const PERSON_ID = "11111111-1111-4111-8111-111111111111";
 const RECORD_ID = "22222222-2222-4222-8222-222222222222";
+const PROOF_FILE_ID = "33333333-3333-4333-8333-333333333333";
 const now = new Date("2026-11-20T00:00:00.000Z");
 
 const ownerActor: AuthenticatedUser = { id: "u-owner", role: Role.OWNER, username: "owner", name: "Owner", jobTitle: "Owner" };
@@ -27,7 +31,8 @@ const supActor: AuthenticatedUser = { id: "u-sup", role: Role.SUPERVISOR, userna
 const makeToken = (actor: AuthenticatedUser) =>
   signAccessToken({ sub: actor.id, role: actor.role, username: actor.username, name: actor.name, jobTitle: actor.jobTitle });
 
-function makeRawRecord(overrides?: Partial<{ status: PaymentStatus; proofStorageKey: string | null }>) {
+function makeRawRecord(overrides?: Partial<{ status: PaymentStatus; proofStoredFileId: string | null }>) {
+  const proofStoredFileId = overrides?.proofStoredFileId ?? null;
   return {
     id: RECORD_ID,
     payeeId: PERSON_ID,
@@ -35,10 +40,10 @@ function makeRawRecord(overrides?: Partial<{ status: PaymentStatus; proofStorage
     amount: new Prisma.Decimal("1500000.00"),
     recordDate: new Date("2026-11-20T00:00:00.000Z"),
     dueDate: new Date("2026-11-25T00:00:00.000Z"),
-    proofStorageKey: overrides?.proofStorageKey ?? null,
-    proofFileName: overrides?.proofStorageKey ? "bukti.jpg" : null,
-    proofMimeType: overrides?.proofStorageKey ? "image/jpeg" : null,
-    proofSizeBytes: overrides?.proofStorageKey ? 245000 : null,
+    proofStoredFileId,
+    proofFile: proofStoredFileId
+      ? { fileName: "bukti.jpg", mimeType: "image/jpeg", sizeBytes: 245000 }
+      : null,
     createdById: ownerActor.id,
     createdAt: now,
     updatedAt: now,
@@ -107,13 +112,12 @@ describe("TASK-16 Pembayaran Freelance/Agent Global (US-17, AC-17.1, BR-36)", ()
     expect(listRes.body.data?.[0]?.summary.nearestDueDate).toBe("2026-11-10");
   });
 
-  it("[AC-17.1 / BR-36] OWNER membuat & mengubah catatan pembayaran serta menghidrasi proofViewUrl", async () => {
-    const proofKey = `payments/${PERSON_ID}/proofs/abc.jpg`;
+  it("[AC-17.1 / BR-36] OWNER membuat & mengubah catatan pembayaran serta menyediakan proofContentPath", async () => {
     vi.spyOn(PaymentRepository, "findPersonById").mockResolvedValue({ id: PERSON_ID, type: PayeeType.AGENT });
-    vi.spyOn(PaymentRepository, "createRecord").mockResolvedValue(makeRawRecord({ proofStorageKey: proofKey }));
-    vi.spyOn(StorageAdapter, "createSignedViewUrl").mockResolvedValue("https://r2.local/signed-proof");
+    vi.spyOn(StoredFileService, "assertAttachable").mockResolvedValue();
+    vi.spyOn(PaymentRepository, "createRecord").mockResolvedValue(makeRawRecord({ proofStoredFileId: PROOF_FILE_ID }));
 
-    const created = await invokeApp<ApiEnvelope<{ amount: number; proofViewUrl: string }>>(app, {
+    const created = await invokeApp<ApiEnvelope<{ amount: number; proofContentPath: string }>>(app, {
       method: "POST",
       path: `/api/v1/payments/people/${PERSON_ID}/records`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
@@ -122,17 +126,16 @@ describe("TASK-16 Pembayaran Freelance/Agent Global (US-17, AC-17.1, BR-36)", ()
         amount: 1500000,
         recordDate: "2026-11-20",
         dueDate: "2026-11-25",
-        proof: { storageKey: proofKey, fileName: "bukti.jpg", mimeType: "image/jpeg", sizeBytes: 245000 },
+        proof: { storedFileId: PROOF_FILE_ID },
       },
     });
     expect(created.status).toBe(201);
     expect(created.body.data?.amount).toBe(1500000);
-    expect(created.body.data?.proofViewUrl).toBe("https://r2.local/signed-proof");
+    expect(created.body.data?.proofContentPath).toBe(`/files/${PROOF_FILE_ID}/content`);
 
-    vi.spyOn(PaymentRepository, "findRecordsByPersonId").mockResolvedValue([makeRawRecord({ proofStorageKey: proofKey })]);
-    vi.spyOn(StorageAdapter, "createSignedViewUrlsMap").mockResolvedValue({ [proofKey]: "https://r2.local/map-proof" });
+    vi.spyOn(PaymentRepository, "findRecordsByPersonId").mockResolvedValue([makeRawRecord({ proofStoredFileId: PROOF_FILE_ID })]);
     const records = await PaymentService.getRecordsByPerson(ownerActor, PERSON_ID, {});
-    expect(records[0]?.proofViewUrl).toBe("https://r2.local/map-proof");
+    expect(records[0]?.proofContentPath).toBe(`/files/${PROOF_FILE_ID}/content`);
 
     vi.spyOn(PaymentRepository, "findRecordById").mockResolvedValue(makeRawRecord({ status: PaymentStatus.UNPAID }));
     vi.spyOn(PaymentRepository, "updateRecord").mockResolvedValue(makeRawRecord({ status: PaymentStatus.PAID }));
@@ -146,48 +149,59 @@ describe("TASK-16 Pembayaran Freelance/Agent Global (US-17, AC-17.1, BR-36)", ()
     expect(patched.body.data?.status).toBe("PAID");
   });
 
-  it("[AC-17.1 / BR-36] Menolak bukti non-JPG/PNG (400), > 2 MB (413), dan storageKey invalid (400)", async () => {
-    vi.spyOn(PaymentRepository, "findPersonById").mockResolvedValue({ id: PERSON_ID, type: PayeeType.FREELANCE });
-    const baseDto = { status: PaymentStatus.PAID, amount: 500000, recordDate: "2026-11-20" };
+  it("[AC-17.1 / BR-36] Menolak bukti non-JPG/PNG (400), > 2 MB (413), dan referensi file invalid (400)", async () => {
+    vi.spyOn(UploadRepository, "payeeExists").mockResolvedValue(true);
 
     await expect(
-      PaymentService.createRecord(ownerActor, PERSON_ID, {
-        ...baseDto,
-        proof: { storageKey: `payments/${PERSON_ID}/proofs/x.pdf`, fileName: "x.pdf", mimeType: "application/pdf", sizeBytes: 1000 },
-      }),
+      UploadService.createSession(
+        {
+          purpose: "payment-proof",
+          payeeId: PERSON_ID,
+          file: { fileName: "x.pdf", contentType: "application/pdf", fileSizeBytes: 1000 },
+        },
+        ownerActor,
+      ),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_FILE_TYPE", statusCode: 400 });
 
     await expect(
-      PaymentService.createRecord(ownerActor, PERSON_ID, {
-        ...baseDto,
-        proof: { storageKey: `payments/${PERSON_ID}/proofs/big.jpg`, fileName: "big.jpg", mimeType: "image/jpeg", sizeBytes: 3 * 1024 * 1024 },
-      }),
+      UploadService.createSession(
+        {
+          purpose: "payment-proof",
+          payeeId: PERSON_ID,
+          file: { fileName: "big.jpg", contentType: "image/jpeg", fileSizeBytes: 3 * 1024 * 1024 },
+        },
+        ownerActor,
+      ),
     ).rejects.toMatchObject({ code: "FILE_TOO_LARGE", statusCode: 413 });
 
+    vi.spyOn(PaymentRepository, "findPersonById").mockResolvedValue({ id: PERSON_ID, type: PayeeType.FREELANCE });
+    vi.spyOn(StoredFileRepository, "findById").mockResolvedValue(null);
     await expect(
       PaymentService.createRecord(ownerActor, PERSON_ID, {
-        ...baseDto,
-        proof: { storageKey: "payments/other-id/proofs/a.png", fileName: "a.png", mimeType: "image/png", sizeBytes: 5000 },
+        status: PaymentStatus.PAID,
+        amount: 500000,
+        recordDate: "2026-11-20",
+        proof: { storedFileId: PROOF_FILE_ID },
       }),
-    ).rejects.toMatchObject({ code: "INVALID_STORAGE_KEY", statusCode: 400 });
+    ).rejects.toMatchObject({ code: "INVALID_FILE_REFERENCE", statusCode: 400 });
   });
 
-  it("[AC-17.1 / BR-36] ADMIN & SUPERVISOR ditolak 403 FORBIDDEN pada endpoint pembayaran & sign payment-proof", async () => {
+  it("[AC-17.1 / BR-36] ADMIN & SUPERVISOR ditolak 403 FORBIDDEN pada endpoint pembayaran & sesi upload payment-proof", async () => {
     const adminHeaders = { Authorization: `Bearer ${makeToken(adminActor)}` };
     const supHeaders = { Authorization: `Bearer ${makeToken(supActor)}` };
 
-    const [aGet, sPost, aSign] = await Promise.all([
+    const [aGet, sPost, aUpload] = await Promise.all([
       invokeApp<ApiEnvelope>(app, { method: "GET", path: "/api/v1/payments/people", headers: adminHeaders }),
       invokeApp<ApiEnvelope>(app, { method: "POST", path: "/api/v1/payments/people", headers: supHeaders, body: { type: "AGENT", name: "X" } }),
       invokeApp<ApiEnvelope>(app, {
         method: "POST",
-        path: "/api/v1/uploads/sign",
+        path: "/api/v1/uploads/sessions",
         headers: adminHeaders,
         body: { purpose: "payment-proof", payeeId: PERSON_ID, file: { fileName: "a.jpg", contentType: "image/jpeg", fileSizeBytes: 1024 } },
       }),
     ]);
 
-    expect([aGet.status, sPost.status, aSign.status]).toEqual([403, 403, 403]);
+    expect([aGet.status, sPost.status, aUpload.status]).toEqual([403, 403, 403]);
   });
 
   it("[Validation] Menolak nama kosong & nominal <= 0 dengan 422 VALIDATION_ERROR", async () => {
