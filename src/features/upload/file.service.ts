@@ -26,10 +26,14 @@ export class FileService {
   private static async assertCanRead(file: NonNullable<Awaited<ReturnType<typeof FileRepository.findById>>>, user: AuthenticatedUser): Promise<void> {
     if (file.reportPhoto) return FileService.assertReportRead(file.reportPhoto.report, user);
     if (file.paymentRecord || file.projectDocument) return FileService.assertOwner(user.role);
-    if (file.drawing) return ProjectService.assertCanAccessProject(user, file.drawing.projectId);
+    if (file.drawing) {
+      await ProjectService.assertCanAccessProject(user, file.drawing.projectId);
+      return;
+    }
     if (file.commsEntry) {
       if (!isCommsAllowedRole(user.role)) throw new ResponseError("FORBIDDEN");
-      return ProjectService.assertCanAccessProject(user, file.commsEntry.projectId);
+      await ProjectService.assertCanAccessProject(user, file.commsEntry.projectId);
+      return;
     }
     throw new ResponseError("RESOURCE_NOT_FOUND");
   }

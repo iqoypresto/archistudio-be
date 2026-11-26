@@ -47,6 +47,6 @@ export class UploadController {
   static async cancel(req: Request, res: Response): Promise<void> {
     const params = validate(UploadValidation.BODY.chunkParams, req.params);
     await UploadService.cancel(params.uploadSessionId, authenticatedUser(req));
-    ResponseHelper.ok(res, COMMON_MESSAGES.DELETED, { cancelled: true });
+    ResponseHelper.ok(res, COMMON_MESSAGES.UPDATED, { cancelled: true });
   }
 }

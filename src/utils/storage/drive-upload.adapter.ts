@@ -79,10 +79,12 @@ export async function sendDriveChunk(input: {
   total: number;
 }): Promise<DriveChunkResult> {
   if (!isSessionUriAllowed(input.sessionUri)) throw new ResponseError("STORAGE_UNAVAILABLE");
+  const body = new Uint8Array(input.bytes.byteLength);
+  body.set(input.bytes);
   const response = await driveRequest(input.sessionUri, {
     method: "PUT",
     headers: { "Content-Length": String(input.bytes.byteLength), "Content-Range": `bytes ${input.start}-${input.end}/${input.total}` },
-    body: input.bytes,
+    body,
   });
   if (response.status === 308) return { complete: false, nextOffsetBytes: parseNextOffset(response.headers.get("range")) };
   if (response.status === 200 || response.status === 201) {

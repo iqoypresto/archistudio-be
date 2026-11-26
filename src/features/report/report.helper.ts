@@ -1,4 +1,5 @@
 import { ReportType, type WeatherType } from "@prisma/client";
+import { ResponseError } from "../../utils/errors/response-error.util.js";
 import type { ReportDetailRecord, ReportListRecord } from "./report.prisma.js";
 import type {
   DailyReportDetail,

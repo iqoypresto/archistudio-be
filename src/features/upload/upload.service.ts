@@ -7,7 +7,7 @@ import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { cancelDriveUploadSession, createDriveUploadSession, getDriveUploadOffset, sendDriveChunk } from "../../utils/storage/drive-upload.adapter.js";
 import { assertDriveFileMatchesStoredFile, deleteDriveFile, downloadDriveFileBuffer, getDriveFileMetadata } from "../../utils/storage/drive-file.adapter.js";
 import { decryptDriveSessionUri, encryptDriveSessionUri } from "../../utils/storage/drive-session.crypto.js";
-import { hasExpectedFileSignature } from "../../utils/storage/file-signature.helper.js";
+import { hasExpectedFileSignature, requiresFullContentSignatureCheck } from "../../utils/storage/file-signature.helper.js";
 import { ProjectService } from "../project/project.service.js";
 import { ReportUploadSessionService } from "../report/report-upload-session.service.js";
 import { UploadRepository } from "./upload.repository.js";
@@ -47,14 +47,9 @@ function assertSupervisorScope(area: Awaited<ReturnType<typeof UploadRepository.
   if (!assigned) throw new ResponseError(assignments.length ? "ASSIGNMENT_ENDED" : "AREA_SCOPE_FORBIDDEN");
 }
 
-async function resolveTarget(body: UploadInitBody, user: AuthenticatedUser) {
-  if ("reportSessionId" in body) return UploadService.resolveReportTarget(body, user);
-  return UploadService.resolveOfficeTarget(body, user);
-}
-
 export class UploadService {
   static async createSession(body: UploadInitBody, user: AuthenticatedUser): Promise<UploadSessionReceipt> {
-    const target = await resolveTarget(body, user);
+    const target = await UploadService.resolveTarget(body, user);
     assertFileAllowed(body.file, target.purpose);
     const fileName = sanitizeFileName(body.file.fileName);
     const sessionUri = await createDriveUploadSession({ fileName, mimeType: body.file.contentType, sizeBytes: body.file.fileSizeBytes });
@@ -65,7 +60,7 @@ export class UploadService {
         targetId: target.targetId, targetQualifier: target.targetQualifier, fileName,
         mimeType: body.file.contentType, sizeBytes: body.file.fileSizeBytes, uploadedById: user.id,
         sessionUriCiphertext: encryptDriveSessionUri(sessionUri), expiresAt,
-        ...(target.reportSessionId && { reportSessionId: target.reportSessionId }),
+        ...("reportSessionId" in target && { reportSessionId: target.reportSessionId }),
       });
       return {
         storedFileId: stored.storedFile.id, uploadSessionId: stored.uploadSession.id,
@@ -76,6 +71,11 @@ export class UploadService {
       await cancelDriveUploadSession(sessionUri).catch(() => undefined);
       throw error;
     }
+  }
+
+  private static async resolveTarget(body: UploadInitBody, user: AuthenticatedUser) {
+    if ("reportSessionId" in body) return UploadService.resolveReportTarget(body, user);
+    return UploadService.resolveOfficeTarget(body, user);
   }
 
   private static async resolveReportTarget(body: FieldUploadBody, user: AuthenticatedUser) {
@@ -118,6 +118,10 @@ export class UploadService {
     const session = await UploadService.loadOwnedSession(id, user);
     const range = UploadService.parseRange(rangeHeader, bytes, session.storedFile.sizeBytes);
     if (range.start !== session.nextOffsetBytes) throw new ResponseError("UPLOAD_OFFSET_CONFLICT");
+    if (range.start === 0 && !requiresFullContentSignatureCheck(session.storedFile.mimeType) &&
+      !hasExpectedFileSignature(session.storedFile.mimeType, bytes)) {
+      throw new ResponseError("UNSUPPORTED_FILE_TYPE");
+    }
     const uri = UploadService.sessionUri(session.sessionUriCiphertext);
     const result = await sendDriveChunk({ sessionUri: uri, bytes, ...range });
     const nextOffsetBytes = result.complete ? range.total : result.nextOffsetBytes;
@@ -158,9 +162,11 @@ export class UploadService {
     if (!fileId) throw new ResponseError("INVALID_FILE_REFERENCE");
     const metadata = await getDriveFileMetadata(fileId);
     assertDriveFileMatchesStoredFile(metadata, session.storedFile);
-    const bytes = await downloadDriveFileBuffer(fileId, session.storedFile.sizeBytes);
-    if (bytes.byteLength !== session.storedFile.sizeBytes || !hasExpectedFileSignature(session.storedFile.mimeType, bytes)) {
-      throw new ResponseError("UNSUPPORTED_FILE_TYPE");
+    if (requiresFullContentSignatureCheck(session.storedFile.mimeType)) {
+      const bytes = await downloadDriveFileBuffer(fileId, session.storedFile.sizeBytes);
+      if (bytes.byteLength !== session.storedFile.sizeBytes || !hasExpectedFileSignature(session.storedFile.mimeType, bytes)) {
+        throw new ResponseError("UNSUPPORTED_FILE_TYPE");
+      }
     }
     const uploadedAt = new Date();
     await UploadSessionRepository.markReady(id, uploadedAt);

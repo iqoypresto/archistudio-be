@@ -13,6 +13,15 @@ const SIGNATURES: Record<string, (bytes: Buffer) => boolean> = {
     bytes.includes(Buffer.from("[Content_Types].xml")) && bytes.includes(Buffer.from("xl/")),
 };
 
+const FULL_CONTENT_SIGNATURE_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+
+export function requiresFullContentSignatureCheck(mimeType: string): boolean {
+  return FULL_CONTENT_SIGNATURE_TYPES.has(mimeType);
+}
+
 export function hasExpectedFileSignature(mimeType: string, bytes: Buffer): boolean {
   return SIGNATURES[mimeType]?.(bytes) ?? false;
 }
