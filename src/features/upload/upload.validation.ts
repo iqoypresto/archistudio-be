@@ -26,5 +26,8 @@ export class UploadValidation {
     ]),
     chunkParams: z.object({ uploadSessionId: z.string().uuid() }),
     contentParams: z.object({ storedFileId: z.string().uuid() }),
+    contentQuery: z.object({
+      variant: z.enum(["full", "thumb"]).default("full"),
+    }),
   };
 }
