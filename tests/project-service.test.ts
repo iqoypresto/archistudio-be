@@ -260,7 +260,13 @@ describe("TASK-04 Project Management — Unit & Integration Tests", () => {
       1,
     ]);
 
-    const res = await invokeApp<ApiEnvelope<unknown[]>>(app, {
+    vi.spyOn(ProjectRepository, "countActiveByStatus").mockResolvedValue({
+      all: 3,
+      BERJALAN: 2,
+      PERSIAPAN: 1,
+    });
+
+    const res = await invokeApp<ApiEnvelope<unknown[]> & { statusCounts?: { all: number; BERJALAN: number; PERSIAPAN: number } }>(app, {
       method: "GET",
       path: "/api/v1/projects?page=1&pageSize=10",
       headers: {
@@ -271,5 +277,6 @@ describe("TASK-04 Project Management — Unit & Integration Tests", () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.statusCounts).toEqual({ all: 3, BERJALAN: 2, PERSIAPAN: 1 });
   });
 });

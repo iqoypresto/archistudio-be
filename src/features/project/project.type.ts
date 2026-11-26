@@ -35,7 +35,16 @@ export interface ProjectListItem {
   updatedAt: Date;
   _count?: {
     areas: number;
+    drawings?: number;
+    commsEntries?: number;
+    documents?: number;
   };
+}
+
+export interface ProjectStatusCounts {
+  all: number;
+  BERJALAN: number;
+  PERSIAPAN: number;
 }
 
 export interface ProjectAreaSummary {

@@ -36,6 +36,18 @@ async function rangeItem(area: PeriodArea, date: string): Promise<PeriodReportIt
 }
 
 export class PdfExportPeriodService {
+  static async monthlySummary(projectId: string, month: string) {
+    const { from, to } = monthBounds(month);
+    await ReportArchiveService.process({ area: { projectId }, reportDate: { gte: parseDateOnlyUtc(from), lte: parseDateOnlyUtc(to) } });
+    const project = await fetchProjectPeriod(projectId, parseDateOnlyUtc(from), parseDateOnlyUtc(to));
+    if (!project) return null;
+    return {
+      project: { id: project.id, code: project.code, name: project.name },
+      month,
+      areas: calculateMonthlyAreaMetrics(project, month),
+    };
+  }
+
   static async monthly(projectId: string, month: string) {
     const { from, to } = monthBounds(month);
     await ReportArchiveService.process({ area: { projectId }, reportDate: { gte: parseDateOnlyUtc(from), lte: parseDateOnlyUtc(to) } });

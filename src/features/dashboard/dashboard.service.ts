@@ -1,4 +1,4 @@
-import { ReportStatus } from "@prisma/client";
+import { ReportStatus, Role } from "@prisma/client";
 import {
   isRestDay,
   parseDateOnlyUtc,
@@ -27,43 +27,81 @@ function toDateStr(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Menentukan status harian laporan pada tanggal target (BR-11, BR-18, BR-21). */
-function resolveAreaDailyStatus(
-  targetReport: AreaDetailRecord["reports"][number] | undefined,
+/** Mengecek apakah tanggal target berada di luar jadwal efektif proyek/penugasan. */
+function isOutsideSchedule(
   targetDate: string,
-  routineHolidays: number[],
-): AreaDailyStatusType {
-  if (targetReport && targetReport.status === ReportStatus.SUBMITTED) {
-    return targetReport.isLate ? "TERLAMBAT" : "TERKIRIM";
+  projectStart: Date,
+  projectEnd: Date | null,
+  assignmentStart?: Date,
+): boolean {
+  const startStr = toDateStr(projectStart);
+  const endStr = projectEnd ? toDateStr(projectEnd) : null;
+  if (targetDate < startStr) return true;
+  if (endStr && targetDate > endStr) return true;
+  if (assignmentStart && targetDate < toDateStr(assignmentStart)) return true;
+  return false;
+}
+
+/** Menentukan status harian laporan pada tanggal target (BR-11, BR-18, BR-21). */
+function resolveAreaDailyStatus(params: {
+  targetReport: AreaDetailRecord["reports"][number] | undefined;
+  targetDate: string;
+  routineHolidays: number[];
+  hasAssignment: boolean;
+  outsideSchedule: boolean;
+}): AreaDailyStatusType {
+  if (params.targetReport && params.targetReport.status === ReportStatus.SUBMITTED) {
+    return params.targetReport.isLate ? "TERLAMBAT" : "TERKIRIM";
   }
-  if (isRestDay(targetDate, routineHolidays)) {
-    return "LIBUR_RUTIN";
-  }
+  if (!params.hasAssignment) return "BELUM_DITUGASKAN";
+  if (params.outsideSchedule) return "DI_LUAR_JADWAL";
+  if (isRestDay(params.targetDate, params.routineHolidays)) return "LIBUR_RUTIN";
   return "BELUM_LAPOR";
 }
 
 /** Menghitung evaluasi kunci dan status harian untuk satu record area. */
 function evaluateAreaItem(
   area: AreaDetailRecord,
-  targetDate: string,
+  explicitDate: string | undefined,
+  now: Date,
 ): DashboardAreaStatusItem {
+  const effectiveDate = explicitDate ?? toBusinessDateString(now, area.project.timezone);
   const assignment = area.assignments[0];
   const latestUnlock = area.unlocks[0];
-  const { lockState } = evaluateAreaLock({
-    projectStartDate: area.project.startDate,
-    projectEndDate: area.project.endDate,
-    assignmentStartDate: assignment?.startDate ?? area.project.startDate,
-    assignmentEndDate: assignment?.endDate ?? null,
-    todayDate: targetDate,
-    routineHolidays: area.project.routineHolidays,
-    reports: area.reports,
-    unlockedThroughDate: latestUnlock?.unlockedThroughDate ?? null,
-  });
+  const outsideSchedule = isOutsideSchedule(
+    effectiveDate,
+    area.project.startDate,
+    area.project.endDate,
+    assignment?.startDate,
+  );
+
+  const lockEvaluation = assignment
+    ? evaluateAreaLock({
+        projectStartDate: area.project.startDate,
+        projectEndDate: area.project.endDate,
+        assignmentStartDate: assignment.startDate,
+        assignmentEndDate: assignment.endDate,
+        todayDate: effectiveDate,
+        routineHolidays: area.project.routineHolidays,
+        reports: area.reports,
+        unlockedThroughDate: latestUnlock?.unlockedThroughDate ?? null,
+      }).lockState
+    : {
+        overdueBusinessDaysCount: 0,
+        isOverdueMoreThan3Days: false,
+        oldestOverdueDate: null,
+      };
 
   const targetReport = area.reports.find(
-    (r) => toDateStr(r.reportDate) === targetDate && r.status === ReportStatus.SUBMITTED,
+    (r) => toDateStr(r.reportDate) === effectiveDate && r.status === ReportStatus.SUBMITTED,
   );
-  const status = resolveAreaDailyStatus(targetReport, targetDate, area.project.routineHolidays);
+  const status = resolveAreaDailyStatus({
+    targetReport,
+    targetDate: effectiveDate,
+    routineHolidays: area.project.routineHolidays,
+    hasAssignment: Boolean(assignment),
+    outsideSchedule,
+  });
 
   return {
     areaId: area.id,
@@ -79,9 +117,9 @@ function evaluateAreaItem(
     reportNumber: targetReport?.reportNumber ?? null,
     submittedAt: targetReport?.submittedAt ? targetReport.submittedAt.toISOString() : null,
     isLate: targetReport?.isLate ?? false,
-    overdueBusinessDaysCount: lockState.overdueBusinessDaysCount,
-    isOverdueMoreThan3Days: lockState.isOverdueMoreThan3Days,
-    oldestOverdueDate: lockState.oldestOverdueDate,
+    overdueBusinessDaysCount: lockEvaluation.overdueBusinessDaysCount,
+    isOverdueMoreThan3Days: lockEvaluation.isOverdueMoreThan3Days,
+    oldestOverdueDate: lockEvaluation.oldestOverdueDate,
     latestUnlock: latestUnlock
       ? {
           unlockedThroughDate: toDateStr(latestUnlock.unlockedThroughDate),
@@ -118,18 +156,22 @@ function buildKpiMetrics(
 }
 
 export class DashboardService {
-  /** Mengambil ringkasan metrik dan daftar status area harian (US-12, BR-11, BR-22). */
+  /** Mengambil ringkasan metrik, visibilitas sistem, dan daftar status area harian (US-12). */
   static async getSummary(
     query: DashboardSummaryQuery,
     now = new Date(),
+    actorRole?: Role,
   ): Promise<DashboardSummaryResponse> {
     const targetDate = query.date ?? toBusinessDateString(now, "Asia/Jakarta");
-    const [totalProjects, rawAreas] = await Promise.all([
+    const [totalProjects, rawAreas, systemOverview] = await Promise.all([
       DashboardRepository.countActiveProjects(query.projectId),
       DashboardRepository.findActiveAreasWithDetails(query.projectId),
+      actorRole
+        ? DashboardRepository.getSystemOverview(actorRole === Role.OWNER, now)
+        : Promise.resolve(undefined),
     ]);
 
-    const evaluatedItems = rawAreas.map((area) => evaluateAreaItem(area, targetDate));
+    const evaluatedItems = rawAreas.map((area) => evaluateAreaItem(area, query.date, now));
     const metrics = buildKpiMetrics(totalProjects, evaluatedItems);
     const filteredAreas = filterAreaList(evaluatedItems, query.statusFilter ?? "ALL");
 
@@ -137,10 +179,11 @@ export class DashboardService {
       metrics,
       targetDate,
       areas: filteredAreas,
+      ...(systemOverview ? { systemOverview } : {}),
     };
   }
 
-  /** Mengelompokkan laporan terkirim untuk statistik keterlambatan per supervisor (BR-21). */
+  /** Mengelompokkan laporan terkirim untuk statistik keterlambatan per pengawas (BR-21). */
   static async getSupervisorLateness(
     query: SupervisorLatenessQuery,
   ): Promise<SupervisorLatenessItem[]> {
@@ -150,12 +193,17 @@ export class DashboardService {
       dateTo: query.dateTo ? parseDateOnlyUtc(query.dateTo) : undefined,
     });
 
-    const groups = new Map<string, { name: string; username: string; total: number; late: number }>();
+    const groups = new Map<
+      string,
+      { name: string; username: string; role?: Role; jobTitle?: string; total: number; late: number }
+    >();
     for (const r of reports) {
       const spv = r.supervisor;
       const current = groups.get(spv.id) ?? {
         name: spv.name,
         username: spv.username,
+        role: spv.role,
+        jobTitle: spv.jobTitle,
         total: 0,
         late: 0,
       };
@@ -172,6 +220,8 @@ export class DashboardService {
           supervisorId,
           supervisorName: data.name,
           supervisorUsername: data.username,
+          ...(data.role ? { supervisorRole: data.role } : {}),
+          ...(data.jobTitle ? { supervisorJobTitle: data.jobTitle } : {}),
           totalReports: data.total,
           onTimeCount: onTime,
           lateCount: data.late,

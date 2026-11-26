@@ -96,6 +96,26 @@ export class ProjectRepository {
     ]);
   }
 
+  /** Menghitung jumlah proyek aktif (non-arsip & non-selesai) per status untuk Office. */
+  static async countActiveByStatus(): Promise<{ all: number; BERJALAN: number; PERSIAPAN: number }> {
+    const groups = await prisma.project.groupBy({
+      by: ["status"],
+      where: {
+        deletedAt: null,
+        archivedAt: null,
+        status: { in: [ProjectStatus.BERJALAN, ProjectStatus.PERSIAPAN] },
+      },
+      _count: { _all: true },
+    });
+    let running = 0;
+    let preparing = 0;
+    for (const row of groups) {
+      if (row.status === ProjectStatus.BERJALAN) running = row._count._all;
+      if (row.status === ProjectStatus.PERSIAPAN) preparing = row._count._all;
+    }
+    return { all: running + preparing, BERJALAN: running, PERSIAPAN: preparing };
+  }
+
   /** Mengambil daftar project di Archive (status SELESAI atau arsip manual) (US-22, BR-39). */
   static async findArchived(search?: string): Promise<ProjectListItem[]> {
     return prisma.project.findMany({
@@ -149,6 +169,14 @@ export class ProjectRepository {
       },
       select: {
         ...projectSelect,
+        _count: {
+          select: {
+            areas: { where: { deletedAt: null } },
+            drawings: { where: { archivedAt: null } },
+            commsEntries: true,
+            documents: true,
+          },
+        },
         areas: {
           where: {
             deletedAt: null,

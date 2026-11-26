@@ -149,6 +149,11 @@ export function buildReportsWhere(
         { reportNumber: { contains: query.search, mode: "insensitive" } },
         { progressText: { contains: query.search, mode: "insensitive" } },
         { noWorkReason: { contains: query.search, mode: "insensitive" } },
+        { area: { name: { contains: query.search, mode: "insensitive" } } },
+        { area: { code: { contains: query.search, mode: "insensitive" } } },
+        { area: { project: { name: { contains: query.search, mode: "insensitive" } } } },
+        { area: { project: { code: { contains: query.search, mode: "insensitive" } } } },
+        { supervisor: { name: { contains: query.search, mode: "insensitive" } } },
       ],
     });
   }

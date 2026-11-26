@@ -7,11 +7,13 @@ import { UserService } from "./user.service.js";
 import { UserValidation } from "./user.validation.js";
 
 export class UserController {
-  /** Mengambil daftar pengguna berpaginasi (US-02, US-03). */
+  /** Mengambil daftar pengguna berpaginasi beserta ringkasan global (US-02, US-03). */
   static async getUsers(req: Request, res: Response): Promise<void> {
     const query = validate(UserValidation.QUERY.getUsers, req.query);
     const result = await UserService.getUsers(query);
-    ResponseHelper.paginated(res, USER_MESSAGES.LIST_FETCHED, result.users, result.meta);
+    ResponseHelper.paginated(res, USER_MESSAGES.LIST_FETCHED, result.users, result.meta, {
+      summary: result.summary,
+    });
   }
 
   /** Membuat akun pengguna baru (BR-01, BR-02, BR-04). */

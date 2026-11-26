@@ -7,10 +7,12 @@ import { ProjectRepository } from "../src/features/project/project.repository.js
 import { ProjectService } from "../src/features/project/project.service.js";
 import { assertCanReadReport, buildReportsWhere } from "../src/features/report/report.guard.js";
 import { UploadRepository } from "../src/features/upload/upload.repository.js";
+import { UploadSessionRepository } from "../src/features/upload/upload-session.repository.js";
 import { UserRepository } from "../src/features/user/user.repository.js";
 import type { AuthenticatedUser } from "../src/types/express.d.js";
 import { signAccessToken } from "../src/utils/auth/jwt.util.js";
-import * as storageAdapter from "../src/utils/storage/storage.adapter.js";
+import * as driveSessionCrypto from "../src/utils/storage/drive-session.crypto.js";
+import * as driveUploadAdapter from "../src/utils/storage/drive-upload.adapter.js";
 import { invokeApp } from "./helpers/invoke-app.helper.js";
 import { makeReportRecord } from "./helpers/report-fixture.helper.js";
 
@@ -110,7 +112,7 @@ describe("REV-01..REV-04 Site Manager Flow, Area Assignment & 4-Role Comms Uploa
     ]);
   });
 
-  it("[BR-35 / K-02] POST /uploads/sign purpose comms-attachment mengizinkan SITE_MANAGER & SUPERVISOR sesuai scope project", async () => {
+  it("[BR-35 / K-02] POST /uploads/sessions purpose comms-attachment mengizinkan SITE_MANAGER & SUPERVISOR sesuai scope project", async () => {
     vi.spyOn(ProjectRepository, "findById").mockResolvedValue({
       id: PROJ_ID, code: "VLA01", name: "Villa", location: "Bali", clientName: "Klien",
       startDate: now, endDate: null, status: ProjectStatus.BERJALAN, timezone: "Asia/Jakarta",
@@ -118,16 +120,17 @@ describe("REV-01..REV-04 Site Manager Flow, Area Assignment & 4-Role Comms Uploa
       createdAt: now, updatedAt: now, areas: [],
     });
     vi.spyOn(UploadRepository, "projectAcceptsFiles").mockResolvedValue(true);
-    vi.spyOn(storageAdapter, "createSignedUploadUrl").mockImplementation(async ({ storageKey }) => ({
-      uploadUrl: `https://storage.test/${storageKey}`,
-      storageKey,
-      expiresInSeconds: 300,
-    }));
+    vi.spyOn(driveUploadAdapter, "createDriveUploadSession").mockResolvedValue("https://www.googleapis.com/upload/drive/v3/files?upload_id=session-1");
+    vi.spyOn(driveSessionCrypto, "encryptDriveSessionUri").mockReturnValue("enc:session-1");
+    vi.spyOn(UploadSessionRepository, "create").mockResolvedValue({
+      storedFile: { id: "sf-comms-1" },
+      uploadSession: { id: "us-comms-1" },
+    } as never);
 
     const [smRes, supRes] = await Promise.all([
-      invokeApp<ApiEnvelope<{ storageKey: string }>>(app, {
+      invokeApp<ApiEnvelope<{ storedFileId: string; uploadSessionId: string }>>(app, {
         method: "POST",
-        path: "/api/v1/uploads/sign",
+        path: "/api/v1/uploads/sessions",
         headers: authHeader(smActor),
         body: {
           purpose: "comms-attachment",
@@ -135,9 +138,9 @@ describe("REV-01..REV-04 Site Manager Flow, Area Assignment & 4-Role Comms Uploa
           file: { fileName: "nota.pdf", contentType: "application/pdf", fileSizeBytes: 100_000 },
         },
       }),
-      invokeApp<ApiEnvelope<{ storageKey: string }>>(app, {
+      invokeApp<ApiEnvelope<{ storedFileId: string; uploadSessionId: string }>>(app, {
         method: "POST",
-        path: "/api/v1/uploads/sign",
+        path: "/api/v1/uploads/sessions",
         headers: authHeader(supActor),
         body: {
           purpose: "comms-attachment",
@@ -147,8 +150,9 @@ describe("REV-01..REV-04 Site Manager Flow, Area Assignment & 4-Role Comms Uploa
       }),
     ]);
 
-    expect(smRes.status).toBe(200);
-    expect(supRes.status).toBe(200);
-    expect(smRes.body.data?.storageKey).toContain(`projects/${PROJ_ID}/comms-attachments/`);
+    expect(smRes.status).toBe(201);
+    expect(supRes.status).toBe(201);
+    expect(smRes.body.data?.storedFileId).toBe("sf-comms-1");
+    expect(supRes.body.data?.uploadSessionId).toBe("us-comms-1");
   });
 });

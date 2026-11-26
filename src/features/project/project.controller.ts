@@ -13,7 +13,13 @@ export class ProjectController {
     if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
     const query = validate(ProjectValidation.QUERY.getProjects, req.query);
     const result = await ProjectService.getProjects(req.user, query);
-    ResponseHelper.paginated(res, PROJECT_MESSAGES.LIST_FETCHED, result.projects, result.meta);
+    ResponseHelper.paginated(
+      res,
+      PROJECT_MESSAGES.LIST_FETCHED,
+      result.projects,
+      result.meta,
+      result.statusCounts ? { statusCounts: result.statusCounts } : undefined,
+    );
   }
 
   /** Mengambil daftar Archive Project untuk OWNER/ADMIN (US-22, BR-39). */

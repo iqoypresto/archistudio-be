@@ -39,6 +39,11 @@ export class ReportValidation {
       areaId: z.string().uuid().optional(),
       dateFrom: z.iso.date().optional(),
       dateTo: z.iso.date().optional(),
+      reportType: z.nativeEnum(ReportType).optional(),
+      isLate: z
+        .enum(["true", "false"])
+        .transform((val) => val === "true")
+        .optional(),
       sortBy: z.enum(["reportDate", "createdAt", "submittedAt"]).default("reportDate"),
     }).refine((query) => !query.dateFrom || !query.dateTo || query.dateFrom <= query.dateTo, {
       message: "Tanggal akhir harus sama atau setelah tanggal awal.", path: ["dateTo"],
@@ -48,6 +53,7 @@ export class ReportValidation {
       areaId: z.string().uuid().optional(),
       supervisorId: z.string().uuid().optional(),
       scope: z.enum(["own", "team"]).optional(),
+      archiveState: z.enum(["active", "archived", "all"]).optional(),
       reportDate: z.string().regex(DATE_YYYY_MM_DD).optional(),
       dateFrom: z.string().regex(DATE_YYYY_MM_DD).optional(),
       dateTo: z.string().regex(DATE_YYYY_MM_DD).optional(),

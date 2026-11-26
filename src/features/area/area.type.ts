@@ -1,4 +1,4 @@
-import type { ProjectStatus } from "@prisma/client";
+import type { ProjectStatus, Role } from "@prisma/client";
 import type { z } from "zod";
 import type { AreaValidation } from "./area.validation.js";
 
@@ -17,6 +17,8 @@ export interface SupervisorSummary {
   username: string;
   phone: string;
   jobTitle: string;
+  role?: Role;
+  isActive?: boolean;
 }
 
 export interface ActiveAssignmentItem {

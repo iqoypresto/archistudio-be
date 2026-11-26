@@ -11,7 +11,7 @@ export class DashboardController {
   /** Handler untuk mengambil ringkasan metrik dan daftar status area dashboard. */
   static async getSummary(req: Request, res: Response) {
     const query = validate(dashboardSummaryQuerySchema, req.query);
-    const result = await DashboardService.getSummary(query);
+    const result = await DashboardService.getSummary(query, new Date(), req.user?.role);
     ResponseHelper.ok(res, "Data ringkasan dashboard berhasil diambil", result);
   }
 

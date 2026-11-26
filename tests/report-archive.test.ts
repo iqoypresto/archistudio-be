@@ -91,4 +91,33 @@ describe("TASK-14 / US-26 — arsip harian", () => {
     }) }), "Asia/Jakarta", expect.any(Date), expect.any(Date));
     expect(list.mock.calls[0]?.[0].where).not.toHaveProperty("archivedAt");
   });
+
+  it("[Wave 1A / AUD-03] archiveState=active memfilter hanya laporan belum arsip & search mencakup proyek/area/supervisor", async () => {
+    mockArchive();
+    const list = vi.spyOn(ReportRepository, "findReportsPaginated").mockResolvedValue([[], 0]);
+    await ReportReadService.list(
+      { page: 1, pageSize: 10, sortBy: "reportDate", sortOrder: "desc", archiveState: "active", search: "Budi" },
+      user,
+    );
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            expect.objectContaining({
+              AND: [
+                expect.objectContaining({
+                  OR: expect.arrayContaining([
+                    { area: { name: { contains: "Budi", mode: "insensitive" } } },
+                    { area: { project: { name: { contains: "Budi", mode: "insensitive" } } } },
+                    { supervisor: { name: { contains: "Budi", mode: "insensitive" } } },
+                  ]),
+                }),
+              ],
+            }),
+            { archivedAt: null, status: "SUBMITTED" },
+          ],
+        },
+      }),
+    );
+  });
 });

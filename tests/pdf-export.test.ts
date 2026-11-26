@@ -140,4 +140,32 @@ describe("TASK-08 Backend Export PDF Laporan Harian Opsi A (US-15, BR-27..BR-31)
     expect(result.buffer).toBeInstanceOf(Buffer);
     expect(result.buffer.length).toBeGreaterThan(100);
   });
+
+  it("[Wave 1B] menolak export PDF harian pada hari libur rutin agar tidak menghasilkan PDF kosong", async () => {
+    vi.spyOn(ReportArchiveService, "process").mockResolvedValue(undefined);
+    const createdAt = new Date("2026-11-01T00:00:00.000Z");
+    vi.spyOn(prisma.project, "findFirst").mockResolvedValue({
+      id: "proj-1",
+      code: "VLA01",
+      name: "Villa Canggu",
+      location: "Bali",
+      clientName: "Ibu Clara",
+      startDate: new Date("2026-11-01T00:00:00.000Z"),
+      endDate: null,
+      status: ProjectStatus.BERJALAN,
+      timezone: "Asia/Jakarta",
+      routineHolidays: [0],
+      completedAt: null,
+      archivedAt: null,
+      siteManagerId: null,
+      deletedAt: null,
+      createdAt,
+      updatedAt: createdAt,
+      areas: [],
+    } as unknown as ProjectWithReportPhotos);
+
+    await expect(
+      PdfExportService.generateDailyReportPdf("proj-1", "2026-11-08"),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR", statusCode: 422 });
+  });
 });

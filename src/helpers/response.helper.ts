@@ -13,15 +13,16 @@ export class ResponseHelper {
     return res.status(StatusCodes.CREATED).json({ success: true, message, data });
   }
 
-  /** Mengirim respons sukses berpaginasi 200 OK beserta metadata halaman. */
+  /** Mengirim respons sukses berpaginasi 200 OK beserta metadata halaman dan ringkasan opsional. */
   static paginated<T>(
     res: Response,
     message: string,
     data: T[],
     meta: PaginationMeta,
+    extra?: Record<string, unknown>,
   ) {
     return res
       .status(StatusCodes.OK)
-      .json({ success: true, message, data, meta });
+      .json({ success: true, message, data, meta, ...(extra ?? {}) });
   }
 }

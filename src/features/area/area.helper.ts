@@ -13,6 +13,8 @@ export const supervisorSelect = Prisma.validator<Prisma.UserSelect>()({
   username: true,
   phone: true,
   jobTitle: true,
+  role: true,
+  isActive: true,
 });
 
 export const assignmentSelect = Prisma.validator<Prisma.AreaAssignmentSelect>()({

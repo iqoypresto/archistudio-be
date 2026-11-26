@@ -69,6 +69,11 @@ describe("TASK-22 API surfaces (AC-23.1, BR-03, BR-40)", () => {
       id: "sup-1", role: Role.SUPERVISOR, username: "sup-1", name: "Supervisor", jobTitle: "Supervisor",
     };
     const repositorySpy = vi.spyOn(ProjectRepository, "findManyAndCount").mockResolvedValue([[], 0]);
+    vi.spyOn(ProjectRepository, "countActiveByStatus").mockResolvedValue({
+      all: 0,
+      BERJALAN: 0,
+      PERSIAPAN: 0,
+    });
 
     const canonicalResponse = await invokeApp<ApiEnvelope<unknown[]>>(app, {
       method: "GET", path: "/api/v1/field/projects?page=1&pageSize=10", headers: authorization(supervisor),
@@ -93,6 +98,11 @@ describe("TASK-22 API surfaces (AC-23.1, BR-03, BR-40)", () => {
       id: "sm-1", role: Role.SITE_MANAGER, username: "sm-1", name: "Site Manager", jobTitle: "Site Manager",
     };
     const repositorySpy = vi.spyOn(ProjectRepository, "findManyAndCount").mockResolvedValue([[], 0]);
+    vi.spyOn(ProjectRepository, "countActiveByStatus").mockResolvedValue({
+      all: 0,
+      BERJALAN: 0,
+      PERSIAPAN: 0,
+    });
 
     const response = await invokeApp<ApiEnvelope<unknown[]>>(app, {
       method: "GET", path: "/api/v1/field/projects?page=1&pageSize=10", headers: authorization(siteManager),
@@ -110,6 +120,11 @@ describe("TASK-22 API surfaces (AC-23.1, BR-03, BR-40)", () => {
       id: "owner-1", role: Role.OWNER, username: "owner-1", name: "Owner", jobTitle: "Owner",
     };
     const repositorySpy = vi.spyOn(ProjectRepository, "findManyAndCount").mockResolvedValue([[], 0]);
+    vi.spyOn(ProjectRepository, "countActiveByStatus").mockResolvedValue({
+      all: 0,
+      BERJALAN: 0,
+      PERSIAPAN: 0,
+    });
 
     const response = await invokeApp<ApiEnvelope<unknown[]>>(app, {
       method: "GET", path: "/api/v1/office/projects?page=1&pageSize=10", headers: authorization(owner),

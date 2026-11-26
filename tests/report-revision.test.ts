@@ -1,14 +1,13 @@
-import { ReportStatus, Role, WeatherType } from "@prisma/client";
+import { ProjectStatus, ReportStatus, Role, WeatherType } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.js";
 import { ReportRepository } from "../src/features/report/report.repository.js";
 import { signAccessToken } from "../src/utils/auth/jwt.util.js";
-import * as storageAdapter from "../src/utils/storage/storage.adapter.js";
 import { invokeApp } from "./helpers/invoke-app.helper.js";
 import {
   makeReportRecord,
-  TEST_PHOTO_KEY,
   TEST_REPORT_ID,
+  TEST_STORED_FILE_ID,
 } from "./helpers/report-fixture.helper.js";
 
 vi.mock("../src/configs/prisma-client.config.js", () => ({ prisma: {} }));
@@ -85,15 +84,12 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
             reportType: "WORK",
             progressText: "Cor kolom lantai 1",
             workerCount: 8,
-            photos: [{ id: "photo-0", storageKey: TEST_PHOTO_KEY, caption: "Foto bukti", sortOrder: 0, takenAt: null }],
+            photos: [{ id: "photo-0", storedFileId: TEST_STORED_FILE_ID, caption: "Foto bukti", sortOrder: 0, takenAt: null }],
           },
           createdAt: new Date("2026-11-16T12:00:00.000Z"),
           revisedBy: { name: "Owner Utama" },
         },
       ],
-    });
-    vi.spyOn(storageAdapter, "createSignedViewUrlsMap").mockResolvedValue({
-      [TEST_PHOTO_KEY]: "https://r2/signed-view",
     });
 
     const res = await invokeApp<
@@ -122,7 +118,7 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
           workerCount: 8,
           signedByName: "Budi Pengawas",
           photos: expect.arrayContaining([
-            expect.objectContaining({ storageKey: TEST_PHOTO_KEY }),
+            expect.objectContaining({ storedFileId: TEST_STORED_FILE_ID }),
           ]),
         }),
       }),
@@ -141,9 +137,6 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
     expect(forbiddenRes.status).toBe(403);
     expect(forbiddenRes.body.error?.code).toBe("AREA_SCOPE_FORBIDDEN");
 
-    vi.spyOn(storageAdapter, "createSignedViewUrlsMap").mockResolvedValue({
-      [TEST_PHOTO_KEY]: "https://r2/signed-view",
-    });
     const adminRes = await invokeApp<ApiEnvelope<{ signedByName: string }>>(app, {
       method: "GET",
       path: `/api/v1/reports/${TEST_REPORT_ID}`,
@@ -151,5 +144,24 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
     });
     expect(adminRes.status).toBe(200);
     expect(adminRes.body.data?.signedByName).toBe("Budi Pengawas");
+  });
+
+  it("[Wave 1A / BR-12, BR-39] menolak OWNER merevisi laporan pada proyek yang sudah SELESAI atau di Archive", async () => {
+    vi.spyOn(ReportRepository, "findReportDetailById").mockResolvedValue(
+      makeReportRecord({
+        status: ReportStatus.SUBMITTED,
+        projectStatus: ProjectStatus.SELESAI,
+      }),
+    );
+
+    const res = await invokeApp<ApiEnvelope>(app, {
+      method: "PATCH",
+      path: `/api/v1/office/reports/${TEST_REPORT_ID}/revise`,
+      headers: authHeaderFor(Role.OWNER, "owner-1", "Owner Utama"),
+      body: { changeSummary: "Mencoba revisi proyek selesai", workerCount: 10 },
+    });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error?.code).toBe("PROJECT_ALREADY_COMPLETED");
   });
 });

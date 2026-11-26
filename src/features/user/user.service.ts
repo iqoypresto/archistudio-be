@@ -13,26 +13,30 @@ import type {
 } from "./user.type.js";
 
 export class UserService {
-  /** Mengambil daftar pengguna dengan filter dan paginasi (US-02, US-03). */
+  /** Mengambil daftar pengguna dengan filter, paginasi, dan ringkasan global (US-02, US-03). */
   static async getUsers(query: GetUsersQuery) {
     const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(
       query.page,
       query.pageSize,
     );
 
-    const [users, total] = await UserRepository.findManyAndCount({
-      skip,
-      take,
-      search: query.search,
-      role: query.role,
-      isActive: query.isActive,
-      sortBy: query.sortBy,
-      sortOrder: query.sortOrder,
-    });
+    const [[users, total], summary] = await Promise.all([
+      UserRepository.findManyAndCount({
+        skip,
+        take,
+        search: query.search,
+        role: query.role,
+        isActive: query.isActive,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+      }),
+      UserRepository.getGlobalSummary(),
+    ]);
 
     return {
       users,
       meta: PaginationHelper.buildMeta(page, pageSize, total),
+      summary,
     };
   }
 
@@ -98,6 +102,15 @@ export class UserService {
           "FORBIDDEN",
           "Admin tidak dapat mengubah peran menjadi selain Supervisor.",
         );
+      }
+    }
+
+    if (dto.role !== undefined && dto.role !== target.role) {
+      if (target.role === "OWNER") {
+        throw new ResponseError("FORBIDDEN", "Peran akun Owner tidak dapat diubah.");
+      }
+      if (actor.id === targetId) {
+        throw new ResponseError("FORBIDDEN", "Anda tidak dapat mengubah peran akun Anda sendiri.");
       }
     }
 
