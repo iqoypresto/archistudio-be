@@ -31,6 +31,9 @@ export class ReportValidation {
   };
 
   static readonly QUERY = {
+    myObligations: paginationQuerySchema.extend({
+      status: z.enum(["ALL", "LATE", "OVERDUE"]).default("ALL"),
+    }),
     archive: paginationQuerySchema.extend({
       projectId: z.string().uuid().optional(),
       areaId: z.string().uuid().optional(),

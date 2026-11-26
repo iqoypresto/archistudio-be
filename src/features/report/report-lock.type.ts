@@ -1,3 +1,5 @@
+import type { PaginationMeta } from "../../types/pagination.type.js";
+
 export interface SupervisorAreaTaskStatus {
   areaId: string;
   areaCode: string;
@@ -20,4 +22,32 @@ export interface SupervisorAreaTaskStatus {
   overdueBusinessDaysCount: number;
   isOverdueMoreThan3Days: boolean;
   oldestOverdueDate: string | null;
+}
+
+export type SupervisorReportWorkFilter = "ALL" | "LATE" | "OVERDUE";
+export type SupervisorReportWorkStatus = "LATE" | "OVERDUE" | "READY" | "WAITING";
+export type SupervisorReportWorkAction = "VIEW_REPORT" | "CREATE_REPORT" | "WAIT";
+
+export interface SupervisorReportWorkItem {
+  id: string;
+  reportId: string | null;
+  projectId: string;
+  projectName: string;
+  areaId: string;
+  areaCode: string;
+  areaName: string;
+  reportDate: string;
+  status: SupervisorReportWorkStatus;
+  action: SupervisorReportWorkAction;
+}
+
+export interface ListMyReportWorkItemsQuery {
+  status: SupervisorReportWorkFilter;
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedSupervisorReportWorkItems {
+  items: SupervisorReportWorkItem[];
+  meta: PaginationMeta;
 }

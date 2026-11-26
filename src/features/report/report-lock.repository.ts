@@ -1,3 +1,4 @@
+import { ReportStatus } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
 
 export class ReportLockRepository {
@@ -50,6 +51,32 @@ export class ReportLockRepository {
               take: 1,
               select: { unlockedThroughDate: true },
             },
+          },
+        },
+      },
+    });
+  }
+
+  /** Mengambil laporan terlambat yang masih aktif untuk daftar tindak lanjut Supervisor. */
+  static async findLateReportsForSupervisor(supervisorId: string) {
+    return prisma.dailyReport.findMany({
+      where: {
+        supervisorId,
+        status: ReportStatus.SUBMITTED,
+        isLate: true,
+        archivedAt: null,
+        area: { deletedAt: null, project: { deletedAt: null } },
+      },
+      orderBy: [{ reportDate: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        reportDate: true,
+        area: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            project: { select: { id: true, name: true } },
           },
         },
       },

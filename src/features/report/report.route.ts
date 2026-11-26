@@ -22,6 +22,12 @@ reportRouter.get(
 );
 
 reportRouter.get(
+  "/my-obligations",
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.SITE_MANAGER),
+  ReportController.listMyReportWorkItems,
+);
+
+reportRouter.get(
   "/my-areas-status",
   AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.SITE_MANAGER),
   ReportController.getMyAreasStatus,

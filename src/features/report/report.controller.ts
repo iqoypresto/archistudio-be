@@ -32,6 +32,14 @@ export class ReportController {
     ResponseHelper.ok(res, COMMON_MESSAGES.FETCHED, result);
   }
 
+  /** Mengambil daftar kewajiban dan laporan terlambat dengan filter serta paginasi server-side. */
+  static async listMyReportWorkItems(req: Request, res: Response): Promise<void> {
+    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
+    const query = validate(ReportValidation.QUERY.myObligations, req.query);
+    const { items, meta } = await ReportLockService.listMyReportWorkItems(req.user.id, query);
+    ResponseHelper.paginated(res, COMMON_MESSAGES.FETCHED, items, meta);
+  }
+
   /** Mengembalikan daftar laporan harian berpaginasi sesuai cakupan role (US-12, US-13). */
   static async listReports(req: Request, res: Response): Promise<void> {
     if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
