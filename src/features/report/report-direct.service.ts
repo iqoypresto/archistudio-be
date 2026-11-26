@@ -1,4 +1,4 @@
-import { Prisma, ReportStatus } from "@prisma/client";
+import { Prisma, ReportStatus, StoragePurpose, StorageTargetType, StoredFileStatus, UploadSessionPhotoStatus } from "@prisma/client";
 import { isPastCutoff, parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
@@ -34,12 +34,13 @@ export class ReportDirectService {
     if (!session || session.areaId !== area.id || toIsoDateOnly(session.reportDate) !== body.reportDate) {
       throw new ResponseError("AREA_SCOPE_FORBIDDEN");
     }
-    const prefix = `projects/${area.project.id}/areas/${area.id}/${body.reportDate}/${user.id}/${body.sessionId}/`;
-    if (body.photos.some((photo) => !photo.storageKey.startsWith(prefix) || photo.storageKey.includes(".."))) {
-      throw new ResponseError("INVALID_STORAGE_KEY");
-    }
-    if (body.photos.some((photo) => !session.photos.some((item) => item.storageKey === photo.storageKey))) {
-      throw new ResponseError("INVALID_STORAGE_KEY");
+    const readyFileIds = new Set(session.photos.filter((item) => item.status === UploadSessionPhotoStatus.PENDING &&
+      item.storedFile.status === StoredFileStatus.READY && item.storedFile.uploadedById === user.id &&
+      item.storedFile.purpose === StoragePurpose.REPORT_PHOTO &&
+      item.storedFile.targetType === StorageTargetType.REPORT_UPLOAD_SESSION && item.storedFile.targetId === body.sessionId)
+      .map((item) => item.storedFileId));
+    if (body.photos.some((photo) => !readyFileIds.has(photo.storedFileId))) {
+      throw new ResponseError("INVALID_FILE_REFERENCE");
     }
     const photos = await enrichReportPhotoMetadata(body.photos, area.project.timezone);
     const submittedAt = new Date();
@@ -56,6 +57,7 @@ export class ReportDirectService {
         signedByName: user.name, signedByTitle: user.jobTitle,
         },
       });
+      if (!created) throw new ResponseError("INVALID_FILE_REFERENCE");
       return hydrateReportDetail(created);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

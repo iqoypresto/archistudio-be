@@ -1,12 +1,12 @@
 import { addDaysToDateString, parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import { ReportArchiveService } from "../report/report-archive.service.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { loadPdfMake } from "../../utils/pdf/pdfmake.loader.js";
 import { findMissingReportAreas } from "./pdf-export.helper.js";
 import { fetchProjectPeriod } from "./pdf-export.repository.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { calculateMonthlyAreaMetrics, type PeriodProject } from "./pdf-export-period.helper.js";
 import { monthlyReportDefinition, rangeReportDefinition, type PeriodReportItem } from "./pdf-export-period.template.js";
+import { toPdfPhotoDataUrl } from "./pdf-photo.helper.js";
 
 type PeriodArea = PeriodProject["areas"][number];
 
@@ -22,18 +22,11 @@ function reportOn(area: PeriodArea, date: string) {
   return area.reports.find((report) => report.reportDate.toISOString().slice(0, 10) === date);
 }
 
-async function photoDataUrl(storageKey: string): Promise<string | null> {
-  try {
-    const bytes = await StorageAdapter.getObjectBuffer(storageKey);
-    return `data:image/jpeg;base64,${bytes.toString("base64")}`;
-  } catch { return null; }
-}
-
 async function rangeItem(area: PeriodArea, date: string): Promise<PeriodReportItem> {
   const report = reportOn(area, date);
   if (!report) return { date, areaCode: area.code, areaName: area.name };
   const photos = [];
-  for (const photo of report.photos) photos.push({ dataUrl: await photoDataUrl(photo.storageKey), caption: photo.caption });
+  for (const photo of report.photos) photos.push({ dataUrl: await toPdfPhotoDataUrl(photo.storedFile), caption: photo.caption });
   return { date, areaCode: area.code, areaName: area.name, reportNumber: report.reportNumber,
     reportType: report.reportType, isLate: report.isLate, weather: report.weather,
     workerCount: report.workerCount, progressText: report.progressText, obstaclesText: report.obstaclesText,

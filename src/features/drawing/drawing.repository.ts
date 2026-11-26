@@ -18,7 +18,7 @@ export class DrawingRepository {
         ...(!params.includeArchived && { archivedAt: null }),
       },
       select: drawingSelect,
-      orderBy: { uploadedAt: "desc" },
+      orderBy: { storedFile: { uploadedAt: "desc" } },
     });
   }
 
@@ -30,13 +30,10 @@ export class DrawingRepository {
     });
   }
 
-  /** Menyimpan metadata Drawing baru setelah direct upload ke object storage (US-18, BR-32, BR-33). */
+  /** Menautkan file berstatus READY ke Drawing (US-18, BR-32, BR-33). */
   static async create(data: {
     projectId: string;
-    storageKey: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
+    storedFileId: string;
   }): Promise<RawDrawingRecord> {
     return prisma.drawing.create({
       data,

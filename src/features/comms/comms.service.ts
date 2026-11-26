@@ -1,15 +1,15 @@
 import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { ProjectService } from "../project/project.service.js";
+import { StoredFileService } from "../upload/stored-file.service.js";
+import { StoredFileRepository } from "../upload/stored-file.repository.js";
+import { StoragePurpose, StorageTargetType } from "@prisma/client";
 import {
   assertCanEditComms,
   assertCommsProjectMutable,
   assertCommsRoleAccess,
-  assertValidCommsAttachment,
   formatCommsEntry,
-  type RawCommsEntry,
 } from "./comms.helper.js";
 import { CommsRepository } from "./comms.repository.js";
 import type {
@@ -18,13 +18,6 @@ import type {
   ListCommsQuery,
   UpdateCommsDTO,
 } from "./comms.type.js";
-
-async function hydrateSingleEntry(entry: RawCommsEntry): Promise<CommsEntryItem> {
-  const viewUrl = entry.attachmentKey
-    ? await StorageAdapter.createSignedViewUrl(entry.attachmentKey)
-    : null;
-  return formatCommsEntry(entry, viewUrl);
-}
 
 export class CommsService {
   /** Mengambil daftar catatan Comms In/Out project sesuai scope role (US-20, BR-35, D-06, K-02). */
@@ -47,14 +40,7 @@ export class CommsService {
       direction: query.direction,
       search: query.search,
     });
-    const keys = records
-      .map((item) => item.attachmentKey)
-      .filter((key): key is string => Boolean(key));
-    const urlMap = keys.length > 0 ? await StorageAdapter.createSignedViewUrlsMap(keys) : {};
-
-    return records.map((item) =>
-      formatCommsEntry(item, item.attachmentKey ? (urlMap[item.attachmentKey] ?? null) : null),
-    );
+    return records.map(formatCommsEntry);
   }
 
   /** Membuat catatan Comms baru oleh role yang diizinkan sesuai scope project (US-20, BR-35, D-05). */
@@ -70,7 +56,7 @@ export class CommsService {
       "Anda hanya dapat menambahkan Comms pada project yang ditugaskan kepada Anda.",
     );
     assertCommsProjectMutable(project);
-    assertValidCommsAttachment(projectId, dto.attachment);
+    if (dto.attachment) await CommsService.assertAttachment(projectId, dto.attachment.storedFileId, actor.id);
 
     const created = await CommsRepository.create({
       projectId,
@@ -78,13 +64,10 @@ export class CommsService {
       entryDate: parseDateOnlyUtc(dto.entryDate),
       subject: dto.subject,
       note: dto.note ?? null,
-      attachmentKey: dto.attachment?.storageKey ?? null,
-      attachmentName: dto.attachment?.fileName ?? null,
-      attachmentMime: dto.attachment?.mimeType ?? null,
-      attachmentBytes: dto.attachment?.sizeBytes ?? null,
+      attachmentStoredFileId: dto.attachment?.storedFileId ?? null,
       createdById: actor.id,
     });
-    return hydrateSingleEntry(created);
+    return formatCommsEntry(created);
   }
 
   /** Memperbarui catatan Comms: hanya pembuat sendiri atau OWNER (US-20, BR-35, D-05). */
@@ -105,7 +88,9 @@ export class CommsService {
     );
     assertCanEditComms(actor, existing.createdById);
     assertCommsProjectMutable(existing.project);
-    assertValidCommsAttachment(existing.projectId, dto.attachment);
+    if (dto.attachment?.storedFileId && dto.attachment.storedFileId !== existing.attachmentStoredFileId) {
+      await CommsService.assertAttachment(existing.projectId, dto.attachment.storedFileId, actor.id);
+    }
 
     const updated = await CommsRepository.update(commsId, {
       ...(dto.entryDate && { entryDate: parseDateOnlyUtc(dto.entryDate) }),
@@ -113,13 +98,25 @@ export class CommsService {
       ...(dto.subject && { subject: dto.subject }),
       ...(dto.note !== undefined && { note: dto.note }),
       ...(dto.attachment !== undefined && {
-        attachmentKey: dto.attachment?.storageKey ?? null,
-        attachmentName: dto.attachment?.fileName ?? null,
-        attachmentMime: dto.attachment?.mimeType ?? null,
-        attachmentBytes: dto.attachment?.sizeBytes ?? null,
+        attachmentStoredFileId: dto.attachment?.storedFileId ?? null,
       }),
       updatedBy: { connect: { id: actor.id } },
     });
-    return hydrateSingleEntry(updated);
+    if (dto.attachment !== undefined && existing.attachmentStoredFileId &&
+      existing.attachmentStoredFileId !== (dto.attachment?.storedFileId ?? null)) {
+      await StoredFileRepository.markDeletePending(existing.attachmentStoredFileId);
+    }
+    return formatCommsEntry(updated);
+  }
+
+  private static async assertAttachment(projectId: string, storedFileId: string, uploadedById: string): Promise<void> {
+    await StoredFileService.assertAttachable({
+      storedFileId,
+      purpose: StoragePurpose.COMMS_ATTACHMENT,
+      targetType: StorageTargetType.PROJECT,
+      targetId: projectId,
+      targetQualifier: null,
+      uploadedById,
+    });
   }
 }

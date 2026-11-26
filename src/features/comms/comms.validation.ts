@@ -4,10 +4,7 @@ import { z } from "zod";
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 const commsAttachmentSchema = z.object({
-  storageKey: z.string().trim().min(1, "Kunci file lampiran wajib diisi.").max(500),
-  fileName: z.string().trim().min(1, "Nama file lampiran wajib diisi.").max(255),
-  mimeType: z.string().trim().min(1, "Tipe file lampiran wajib diisi.").max(150),
-  sizeBytes: z.number().int().positive("Ukuran lampiran harus lebih dari 0 byte."),
+  storedFileId: z.string().uuid("Referensi lampiran tidak valid."),
 });
 
 export class CommsValidation {

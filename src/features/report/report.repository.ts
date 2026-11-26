@@ -1,4 +1,4 @@
-import { Prisma, ReportStatus } from "@prisma/client";
+import { DriveUploadSessionStatus, Prisma, ReportStatus, StoragePurpose, StorageTargetType, StoredFileStatus } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
 import {
   buildPhotoCreateRows,
@@ -10,6 +10,18 @@ import {
 import type { ReportPhotoInput } from "./report.type.js";
 
 export class ReportRepository {
+  static findReadyRevisionPhotoIds(reportId: string, ids: string[], uploadedById: string) {
+    return prisma.storedFile.findMany({
+      where: {
+        id: { in: ids }, purpose: StoragePurpose.REPORT_PHOTO,
+        targetType: StorageTargetType.REPORT, targetId: reportId,
+        uploadedById, status: StoredFileStatus.READY,
+        uploadSession: { is: { status: DriveUploadSessionStatus.COMPLETED, expiresAt: { gt: new Date() } } },
+      },
+      select: { id: true },
+    });
+  }
+
   /** Mengambil konteks area, penugasan, laporan terkirim, dan buka kunci untuk submit. */
   static async findAreaContextForSubmit(areaId: string) {
     return prisma.area.findFirst({
@@ -81,7 +93,7 @@ export class ReportRepository {
         reportNumber: input.reportNumber, areaId: input.areaId,
         supervisorId: input.supervisorId, reportDate: input.reportDate,
         status: ReportStatus.SUBMITTED, ...input.data,
-        photos: { create: buildPhotoCreateRows(input.photos, input.supervisorId) },
+        photos: { create: buildPhotoCreateRows(input.photos) },
         submittedAt: input.submittedAt, archivedAt: input.archivedAt,
         isLate: input.isLate, signedByName: input.signedByName,
         signedByTitle: input.signedByTitle,
@@ -111,7 +123,7 @@ export class ReportRepository {
           previousSnapshotJson: input.previousSnapshotJson,
         },
       });
-      await replacePhotosInTx(tx, input.reportId, input.photos, input.revisedById);
+      await replacePhotosInTx(tx, input.reportId, input.photos);
       return tx.dailyReport.update({
         where: { id: input.reportId },
         data: {

@@ -46,6 +46,37 @@ enum UploadSessionPhotoStatus {
   DELETED
 }
 
+enum StoragePurpose {
+  REPORT_PHOTO
+  PAYMENT_PROOF
+  DRAWING
+  PROJECT_DOCUMENT
+  COMMS_ATTACHMENT
+}
+
+enum StoredFileStatus {
+  UPLOADING
+  READY
+  DELETE_PENDING
+  DELETED
+  FAILED
+}
+
+enum DriveUploadSessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum StorageTargetType {
+  REPORT_UPLOAD_SESSION
+  REPORT
+  PAYEE
+  PROJECT
+}
+
 enum PayeeType {
   FREELANCE
   AGENT
@@ -85,7 +116,7 @@ model User {
   assignedByRecords    AreaAssignment[]      @relation("AssignedByUser")
   submittedReports     DailyReport[]         @relation("SupervisorReports")
   revisedReports       DailyReport[]         @relation("RevisedByOwner")
-  uploadedPhotos       ReportPhoto[]
+  uploadedStoredFiles  StoredFile[]
   reportUploadSessions ReportUploadSession[]
   reportRevisions      ReportRevision[]
   reportUnlocks        ReportUnlock[]
@@ -224,29 +255,77 @@ model ReportUploadSession {
 }
 
 model ReportUploadSessionPhoto {
-  id        String                   @id @default(uuid())
-  sessionId String                   @map("session_id")
-  storageKey String                  @unique @map("storage_key")
-  status    UploadSessionPhotoStatus @default(PENDING)
-  createdAt DateTime                 @default(now()) @map("created_at")
-  updatedAt DateTime                 @updatedAt @map("updated_at")
-  session   ReportUploadSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id           String                   @id @default(uuid())
+  sessionId    String                   @map("session_id")
+  storedFileId String                   @unique @map("stored_file_id")
+  status       UploadSessionPhotoStatus @default(PENDING)
+  createdAt    DateTime                 @default(now()) @map("created_at")
+  updatedAt    DateTime                 @updatedAt @map("updated_at")
+  session      ReportUploadSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  storedFile   StoredFile               @relation(fields: [storedFileId], references: [id])
+
   @@index([sessionId, status])
   @@map("report_upload_session_photos")
+}
+
+model StoredFile {
+  id               String           @id @default(uuid())
+  driveFileId      String?          @unique @map("drive_file_id")
+  driveFolderId    String           @map("drive_folder_id")
+  purpose          StoragePurpose
+  targetType       StorageTargetType @map("target_type")
+  targetId         String           @map("target_id")
+  targetQualifier  String?          @map("target_qualifier")
+  fileName         String           @map("file_name")
+  mimeType         String           @map("mime_type")
+  sizeBytes        Int              @map("size_bytes")
+  status           StoredFileStatus @default(UPLOADING)
+  uploadedById     String           @map("uploaded_by_id")
+  uploadedAt       DateTime?        @map("uploaded_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  uploadedBy              User                    @relation(fields: [uploadedById], references: [id])
+  uploadSession           DriveUploadSession?
+  reportUploadSessionPhoto ReportUploadSessionPhoto?
+  reportPhoto             ReportPhoto?
+  paymentRecord           PaymentRecord?
+  drawing                 Drawing?
+  projectDocument         ProjectDocument?
+  commsEntry              CommsEntry?
+
+  @@index([purpose, targetType, targetId, status])
+  @@index([uploadedById, createdAt])
+  @@index([status, createdAt])
+  @@map("stored_files")
+}
+
+model DriveUploadSession {
+  id                   String                  @id @default(uuid())
+  storedFileId         String                  @unique @map("stored_file_id")
+  sessionUriCiphertext String?                 @map("session_uri_ciphertext")
+  nextOffsetBytes      Int                     @default(0) @map("next_offset_bytes")
+  status               DriveUploadSessionStatus @default(ACTIVE)
+  expiresAt            DateTime                @map("expires_at")
+  createdAt            DateTime                @default(now()) @map("created_at")
+  updatedAt            DateTime                @updatedAt @map("updated_at")
+
+  storedFile StoredFile @relation(fields: [storedFileId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@map("drive_upload_sessions")
 }
 
 model ReportPhoto {
   id           String      @id @default(uuid())
   reportId     String      @map("report_id")
-  storageKey   String      @map("storage_key")
+  storedFileId String      @unique @map("stored_file_id")
   caption      String?
   sortOrder    Int         @map("sort_order")
   takenAt      DateTime?   @map("taken_at")
-  uploadedAt   DateTime?   @map("uploaded_at") /// LastModified R2; null untuk foto lama tanpa metadata BR-23
-  uploadedById String      @map("uploaded_by_id")
   createdAt    DateTime    @default(now()) @map("created_at")
   report       DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+  storedFile   StoredFile  @relation(fields: [storedFileId], references: [id])
   @@index([reportId, sortOrder])
   @@map("report_photos")
 }
@@ -297,16 +376,14 @@ model PaymentRecord {
   amount          Decimal       @db.Decimal(14, 2)
   recordDate      DateTime      @map("record_date") @db.Date
   dueDate         DateTime?     @map("due_date") @db.Date
-  proofStorageKey String?       @map("proof_storage_key")
-  proofFileName   String?       @map("proof_file_name")
-  proofMimeType   String?       @map("proof_mime_type")
-  proofSizeBytes  Int?          @map("proof_size_bytes")
+  proofStoredFileId String?     @unique @map("proof_stored_file_id")
   createdById     String        @map("created_by_id")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   payee     ExternalPayee @relation(fields: [payeeId], references: [id])
   createdBy User          @relation(fields: [createdById], references: [id])
+  proofFile StoredFile?   @relation(fields: [proofStoredFileId], references: [id])
 
   @@index([payeeId, recordDate])
   @@index([status, dueDate])
@@ -314,34 +391,28 @@ model PaymentRecord {
 }
 
 model Drawing {
-  id         String    @id @default(uuid())
-  projectId  String    @map("project_id")
-  storageKey String    @map("storage_key")
-  fileName   String    @map("file_name")
-  mimeType   String    @map("mime_type")
-  sizeBytes  Int       @map("size_bytes")
-  uploadedAt DateTime  @default(now()) @map("uploaded_at")
-  archivedAt DateTime? @map("archived_at")
+  id           String    @id @default(uuid())
+  projectId    String    @map("project_id")
+  storedFileId String    @unique @map("stored_file_id")
+  archivedAt   DateTime? @map("archived_at")
 
-  project Project @relation(fields: [projectId], references: [id])
+  project    Project    @relation(fields: [projectId], references: [id])
+  storedFile StoredFile @relation(fields: [storedFileId], references: [id])
 
-  @@index([projectId, archivedAt, uploadedAt])
+  @@index([projectId, archivedAt])
   @@map("drawings")
 }
 
 model ProjectDocument {
-  id         String             @id @default(uuid())
-  projectId  String             @map("project_id")
-  type       ProjectDocumentType
-  storageKey String             @map("storage_key")
-  fileName   String             @map("file_name")
-  mimeType   String             @map("mime_type")
-  sizeBytes  Int                @map("size_bytes")
-  uploadedAt DateTime           @default(now()) @map("uploaded_at")
+  id           String             @id @default(uuid())
+  projectId    String             @map("project_id")
+  type         ProjectDocumentType
+  storedFileId String             @unique @map("stored_file_id")
 
-  project Project @relation(fields: [projectId], references: [id])
+  project    Project    @relation(fields: [projectId], references: [id])
+  storedFile StoredFile @relation(fields: [storedFileId], references: [id])
 
-  @@index([projectId, type, uploadedAt])
+  @@index([projectId, type])
   @@map("project_documents")
 }
 
@@ -352,10 +423,7 @@ model CommsEntry {
   entryDate       DateTime      @map("entry_date") @db.Date
   subject         String
   note            String?
-  attachmentKey   String?       @map("attachment_key")
-  attachmentName  String?       @map("attachment_name")
-  attachmentMime  String?       @map("attachment_mime")
-  attachmentBytes Int?          @map("attachment_bytes")
+  attachmentStoredFileId String? @unique @map("attachment_stored_file_id")
   createdById     String        @map("created_by_id")
   updatedById     String?       @map("updated_by_id")
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -364,6 +432,7 @@ model CommsEntry {
   project   Project @relation(fields: [projectId], references: [id])
   createdBy User    @relation("CommsCreatedBy", fields: [createdById], references: [id])
   updatedBy User?   @relation("CommsUpdatedBy", fields: [updatedById], references: [id])
+  attachment StoredFile? @relation(fields: [attachmentStoredFileId], references: [id])
 
   @@index([projectId, direction, entryDate])
   @@map("comms_entries")

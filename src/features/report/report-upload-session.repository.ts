@@ -1,4 +1,4 @@
-import { UploadSessionPhotoStatus, UploadSessionStatus } from "@prisma/client";
+import { DriveUploadSessionStatus, StoredFileStatus, StoragePurpose, StorageTargetType, UploadSessionPhotoStatus, UploadSessionStatus } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
 import { buildPhotoCreateRows, REPORT_DETAIL_INCLUDE, type ReportMutationData } from "./report.prisma.js";
 import type { ReportPhotoInput } from "./report.type.js";
@@ -23,12 +23,6 @@ export class ReportUploadSessionRepository {
     return result.count === 1;
   }
 
-  static async addPhoto(sessionId: string, storageKey: string): Promise<void> {
-    const count = await prisma.reportUploadSessionPhoto.count({ where: { sessionId } });
-    if (count >= 50) throw new Error("Batas percobaan upload sesi tercapai.");
-    await prisma.reportUploadSessionPhoto.create({ data: { sessionId, storageKey } });
-  }
-
   static async claimForFinalizing(id: string, supervisorId: string, now: Date): Promise<boolean> {
     const result = await prisma.reportUploadSession.updateMany({
       where: { id, supervisorId, status: { in: [UploadSessionStatus.UPLOADING, UploadSessionStatus.FINALIZING] }, expiresAt: { gt: now } },
@@ -38,37 +32,44 @@ export class ReportUploadSessionRepository {
   }
 
   static findOwned(id: string, supervisorId: string) {
-    return prisma.reportUploadSession.findFirst({ where: { id, supervisorId }, include: { photos: true } });
+    return prisma.reportUploadSession.findFirst({ where: { id, supervisorId }, include: { photos: { include: { storedFile: true } } } });
   }
 
   static async finalizeAndCreateReport(input: {
-    sessionId: string; report: {
+    sessionId: string;
+    report: {
       reportNumber: string; areaId: string; supervisorId: string; reportDate: Date;
       data: ReportMutationData; photos: ReportPhotoInput[];
       submittedAt: Date; archivedAt: Date | null; isLate: boolean; signedByName: string; signedByTitle: string;
     };
   }) {
-    const photoKeys = input.report.photos.map((photo) => photo.storageKey);
+    const storedFileIds = input.report.photos.map((photo) => photo.storedFileId);
     return prisma.$transaction(async (tx) => {
-      const session = await tx.reportUploadSession.findUniqueOrThrow({ where: { id: input.sessionId }, include: { photos: true } });
-      if (!session.photos.length || photoKeys.some((key) => !session.photos.some((item) => item.storageKey === key))) {
-        throw new Error("Foto laporan tidak cocok dengan sesi upload.");
+      const session = await tx.reportUploadSession.findUniqueOrThrow({
+        where: { id: input.sessionId }, include: { photos: { include: { storedFile: true } } },
+      });
+      const validPhotos = session.photos.filter((item) => item.status === UploadSessionPhotoStatus.PENDING &&
+        item.storedFile.status === StoredFileStatus.READY && item.storedFile.purpose === StoragePurpose.REPORT_PHOTO &&
+        item.storedFile.uploadedById === input.report.supervisorId &&
+        item.storedFile.targetType === StorageTargetType.REPORT_UPLOAD_SESSION && item.storedFile.targetId === input.sessionId);
+      if (!storedFileIds.length || storedFileIds.some((id) => !validPhotos.some((item) => item.storedFileId === id))) {
+        return null;
       }
       const created = await tx.dailyReport.create({
         data: {
           reportNumber: input.report.reportNumber, areaId: input.report.areaId,
           supervisorId: input.report.supervisorId, reportDate: input.report.reportDate,
           status: "SUBMITTED", ...input.report.data,
-          photos: { create: buildPhotoCreateRows(input.report.photos, input.report.supervisorId) },
+          photos: { create: buildPhotoCreateRows(input.report.photos) },
           submittedAt: input.report.submittedAt, archivedAt: input.report.archivedAt,
           isLate: input.report.isLate, signedByName: input.report.signedByName,
           signedByTitle: input.report.signedByTitle,
         }, include: REPORT_DETAIL_INCLUDE,
       });
       await tx.reportUploadSessionPhoto.updateMany({
-        where: { sessionId: input.sessionId, storageKey: { in: photoKeys } }, data: { status: "ATTACHED" },
+        where: { sessionId: input.sessionId, storedFileId: { in: storedFileIds } }, data: { status: UploadSessionPhotoStatus.ATTACHED },
       });
-      await tx.reportUploadSession.update({ where: { id: input.sessionId }, data: { status: "COMMITTED" } });
+      await tx.reportUploadSession.update({ where: { id: input.sessionId }, data: { status: UploadSessionStatus.COMMITTED } });
       return created;
     });
   }
@@ -80,9 +81,11 @@ export class ReportUploadSessionRepository {
         { status: UploadSessionStatus.COMMITTED, photos: { some: { status: UploadSessionPhotoStatus.PENDING } } },
         { status: UploadSessionStatus.CLEANUP_PENDING },
       ] },
-      take: limit, orderBy: { expiresAt: "asc" }, include: { photos: { where: { status: UploadSessionPhotoStatus.PENDING } } },
+      take: limit, orderBy: { expiresAt: "asc" },
+      include: { photos: { where: { status: UploadSessionPhotoStatus.PENDING }, include: { storedFile: { include: { uploadSession: true } } } } },
     });
-    const results: { sessionId: string; sessionStatus: UploadSessionStatus; photoIds: string[]; keys: string[] }[] = [];
+    type Candidate = (typeof candidates)[number];
+    const results: Array<{ sessionId: string; sessionStatus: UploadSessionStatus; photos: Candidate["photos"] }> = [];
     for (const session of candidates) {
       if (session.status !== UploadSessionStatus.COMMITTED && session.status !== UploadSessionStatus.CLEANUP_PENDING) {
         const claimed = await prisma.reportUploadSession.updateMany({
@@ -91,13 +94,21 @@ export class ReportUploadSessionRepository {
         });
         if (!claimed.count) continue;
       }
-      results.push({ sessionId: session.id, sessionStatus: session.status, photoIds: session.photos.map((photo) => photo.id), keys: session.photos.map((photo) => photo.storageKey) });
+      results.push({ sessionId: session.id, sessionStatus: session.status, photos: session.photos });
     }
     return results;
   }
 
-  static markPhotoDeleted(id: string) {
-    return prisma.reportUploadSessionPhoto.update({ where: { id }, data: { status: UploadSessionPhotoStatus.DELETED } });
+  static async markPhotoDeleted(photoId: string, storedFileId: string) {
+    return prisma.$transaction([
+      prisma.reportUploadSessionPhoto.update({ where: { id: photoId }, data: { status: UploadSessionPhotoStatus.DELETED } }),
+      prisma.storedFile.update({ where: { id: storedFileId }, data: { status: StoredFileStatus.DELETED } }),
+      prisma.driveUploadSession.updateMany({ where: { storedFileId, status: DriveUploadSessionStatus.ACTIVE }, data: { status: DriveUploadSessionStatus.CANCELLED, sessionUriCiphertext: null } }),
+    ]);
+  }
+
+  static markFileDeletePending(storedFileId: string) {
+    return prisma.storedFile.updateMany({ where: { id: storedFileId }, data: { status: StoredFileStatus.DELETE_PENDING } });
   }
 
   static markCleaned(id: string) {

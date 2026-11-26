@@ -4,12 +4,8 @@ import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import type {
   PaymentPayeeItem,
-  PaymentProofInput,
   PaymentRecordItem,
 } from "./payment.type.js";
-
-export const PAYMENT_PROOF_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
-export const MAX_PAYMENT_PROOF_BYTES = 2 * 1024 * 1024;
 
 export const PAYMENT_MESSAGES = {
   PEOPLE_FETCHED: "Daftar penerima pembayaran berhasil diambil.",
@@ -44,10 +40,8 @@ export const paymentRecordSelect = Prisma.validator<Prisma.PaymentRecordSelect>(
   amount: true,
   recordDate: true,
   dueDate: true,
-  proofStorageKey: true,
-  proofFileName: true,
-  proofMimeType: true,
-  proofSizeBytes: true,
+  proofStoredFileId: true,
+  proofFile: { select: { fileName: true, mimeType: true, sizeBytes: true } },
   createdById: true,
   createdAt: true,
   updatedAt: true,
@@ -65,24 +59,6 @@ export type RawPaymentRecord = Prisma.PaymentRecordGetPayload<{
 export function assertOwnerPaymentAccess(actor: AuthenticatedUser): void {
   if (actor.role !== "OWNER") {
     throw new ResponseError("FORBIDDEN", "Modul pembayaran Freelance/Agent hanya dapat diakses oleh Owner.");
-  }
-}
-
-/** Memvalidasi metadata bukti pembayaran opsional (JPG/PNG, maks. 2 MB, prefix payee valid) (BR-36). */
-export function assertValidPaymentProof(
-  payeeId: string,
-  proof?: PaymentProofInput | null,
-): void {
-  if (!proof) return;
-  if (!PAYMENT_PROOF_MIME_TYPES.has(proof.mimeType)) {
-    throw new ResponseError("UNSUPPORTED_FILE_TYPE", "Bukti pembayaran hanya mendukung format JPG atau PNG.");
-  }
-  if (proof.sizeBytes > MAX_PAYMENT_PROOF_BYTES) {
-    throw new ResponseError("FILE_TOO_LARGE", "Ukuran bukti pembayaran maksimal 2 MB.");
-  }
-  const expectedPrefix = `payments/${payeeId}/proofs/`;
-  if (!proof.storageKey.startsWith(expectedPrefix) || proof.storageKey.includes("..")) {
-    throw new ResponseError("INVALID_STORAGE_KEY", "Referensi file bukti pembayaran tidak valid.");
   }
 }
 
@@ -135,10 +111,7 @@ export function formatPayeeItem(raw: RawPayeeRecord, now = new Date()): PaymentP
   };
 }
 
-export function formatPaymentRecord(
-  raw: RawPaymentRecord,
-  proofViewUrl: string | null,
-): PaymentRecordItem {
+export function formatPaymentRecord(raw: RawPaymentRecord): PaymentRecordItem {
   return {
     id: raw.id,
     payeeId: raw.payeeId,
@@ -146,11 +119,11 @@ export function formatPaymentRecord(
     amount: toMoneyNumber(raw.amount),
     recordDate: raw.recordDate.toISOString().slice(0, 10),
     dueDate: raw.dueDate ? raw.dueDate.toISOString().slice(0, 10) : null,
-    proofStorageKey: raw.proofStorageKey,
-    proofFileName: raw.proofFileName,
-    proofMimeType: raw.proofMimeType,
-    proofSizeBytes: raw.proofSizeBytes,
-    proofViewUrl,
+    proofStoredFileId: raw.proofStoredFileId,
+    proofFileName: raw.proofFile?.fileName ?? null,
+    proofMimeType: raw.proofFile?.mimeType ?? null,
+    proofSizeBytes: raw.proofFile?.sizeBytes ?? null,
+    proofContentPath: raw.proofStoredFileId ? `/files/${raw.proofStoredFileId}/content` : null,
     createdById: raw.createdById,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,

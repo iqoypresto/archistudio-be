@@ -9,10 +9,10 @@ export interface ProjectDocumentItem {
   id: string;
   projectId: string;
   type: ProjectDocumentType;
-  storageKey: string;
+  storedFileId: string;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  uploadedAt: Date;
-  viewUrl: string;
+  uploadedAt: Date | null;
+  contentPath: string;
 }

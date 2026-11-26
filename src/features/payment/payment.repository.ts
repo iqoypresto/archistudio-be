@@ -80,10 +80,7 @@ export class PaymentRepository {
     amount: number;
     recordDate: Date;
     dueDate: Date | null;
-    proofStorageKey: string | null;
-    proofFileName: string | null;
-    proofMimeType: string | null;
-    proofSizeBytes: number | null;
+    proofStoredFileId: string | null;
     createdById: string;
   }): Promise<RawPaymentRecord> {
     return prisma.paymentRecord.create({

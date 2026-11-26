@@ -60,7 +60,7 @@ export const REPORT_DETAIL_INCLUDE = Prisma.validator<Prisma.DailyReportInclude>
     },
   },
   supervisor: { select: { id: true, name: true, jobTitle: true, role: true } },
-  photos: { orderBy: { sortOrder: "asc" } },
+  photos: { orderBy: { sortOrder: "asc" }, include: { storedFile: true } },
   revisions: {
     orderBy: { revisionNo: "desc" },
     include: { revisedBy: { select: { name: true } } },
@@ -78,14 +78,12 @@ export interface ReportMutationData {
   locationText?: string | null;
 }
 
-export function buildPhotoCreateRows(photos: ReportPhotoInput[], uploadedById: string) {
+export function buildPhotoCreateRows(photos: ReportPhotoInput[]) {
   return photos.map((photo) => ({
-    storageKey: photo.storageKey,
+    storedFileId: photo.storedFileId,
     caption: photo.caption ?? null,
     sortOrder: photo.sortOrder,
     takenAt: photo.takenAt ? new Date(photo.takenAt) : null,
-    uploadedAt: photo.uploadedAt ? new Date(photo.uploadedAt) : null,
-    uploadedById,
   }));
 }
 
@@ -93,13 +91,12 @@ export async function replacePhotosInTx(
   tx: Prisma.TransactionClient,
   reportId: string,
   photos: ReportPhotoInput[] | undefined,
-  uploadedById: string,
 ): Promise<void> {
   if (photos === undefined) return;
   await tx.reportPhoto.deleteMany({ where: { reportId } });
   if (photos.length === 0) return;
   await tx.reportPhoto.createMany({
-    data: buildPhotoCreateRows(photos, uploadedById).map((row) => ({ ...row, reportId })),
+    data: buildPhotoCreateRows(photos).map((row) => ({ ...row, reportId })),
   });
 }
 

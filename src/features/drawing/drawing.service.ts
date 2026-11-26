@@ -1,19 +1,19 @@
+import { StoragePurpose, StorageTargetType } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
 import { ProjectRepository } from "../project/project.repository.js";
 import { ProjectService } from "../project/project.service.js";
+import { StoredFileService } from "../upload/stored-file.service.js";
 import {
   assertDrawingProjectMutable,
   assertOwnerDrawingAction,
-  assertValidDrawingFile,
   formatDrawingItem,
 } from "./drawing.helper.js";
 import { DrawingRepository } from "./drawing.repository.js";
 import type { CreateDrawingDTO, DrawingItem, ListDrawingsQuery } from "./drawing.type.js";
 
 export class DrawingService {
-  /** Mengambil galeri Drawing project dengan signed GET URL sesuai scope role (US-18, BR-32). */
+  /** Mengambil galeri Drawing project dengan path konten privat sesuai scope role (US-18, BR-32). */
   static async listDrawings(
     actor: AuthenticatedUser,
     projectId: string,
@@ -29,10 +29,7 @@ export class DrawingService {
       projectId,
       includeArchived,
     });
-    const keys = records.map((item) => item.storageKey);
-    const urlMap = keys.length > 0 ? await StorageAdapter.createSignedViewUrlsMap(keys) : {};
-
-    return records.map((item) => formatDrawingItem(item, urlMap[item.storageKey] ?? ""));
+    return records.map(formatDrawingItem);
   }
 
   /** Menyimpan Drawing baru oleh OWNER (US-18, AC-18.1, BR-32, BR-33). */
@@ -45,17 +42,16 @@ export class DrawingService {
     const project = await ProjectRepository.findById(projectId);
     if (!project) throw new ResponseError("RESOURCE_NOT_FOUND", "Project tidak ditemukan.");
     assertDrawingProjectMutable(project);
-    assertValidDrawingFile(projectId, dto);
+    await StoredFileService.assertAttachable({
+      storedFileId: dto.storedFileId, purpose: StoragePurpose.DRAWING,
+      targetType: StorageTargetType.PROJECT, targetId: projectId, uploadedById: actor.id,
+    });
 
     const created = await DrawingRepository.create({
       projectId,
-      storageKey: dto.storageKey,
-      fileName: dto.fileName,
-      mimeType: dto.mimeType,
-      sizeBytes: dto.sizeBytes,
+      storedFileId: dto.storedFileId,
     });
-    const viewUrl = await StorageAdapter.createSignedViewUrl(created.storageKey);
-    return formatDrawingItem(created, viewUrl);
+    return formatDrawingItem(created);
   }
 
   /** Mengarsipkan Drawing oleh OWNER (US-18, AC-18.1, BR-32). */
@@ -75,7 +71,6 @@ export class DrawingService {
     }
 
     const updated = await DrawingRepository.markArchived(drawingId, now);
-    const viewUrl = await StorageAdapter.createSignedViewUrl(updated.storageKey);
-    return formatDrawingItem(updated, viewUrl);
+    return formatDrawingItem(updated);
   }
 }

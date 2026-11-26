@@ -6,7 +6,6 @@ import {
 } from "../../helpers/date.helper.js";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { createSignedViewUrlsMap } from "../../utils/storage/storage.adapter.js";
 import { ReportLockService } from "./report-lock.service.js";
 import { mapReportDetail, toIsoDateOnly } from "./report.helper.js";
 import type { ReportMutationData, ReportDetailRecord } from "./report.prisma.js";
@@ -167,9 +166,7 @@ export function buildReportsWhere(
 export async function hydrateReportDetail(
   record: ReportDetailRecord,
 ): Promise<DailyReportDetail> {
-  const keys = record.photos.map((p) => p.storageKey);
-  const urlMap = keys.length > 0 ? await createSignedViewUrlsMap(keys) : {};
-  return mapReportDetail(record, urlMap);
+  return mapReportDetail(record);
 }
 
 export function assertCanReadReport(

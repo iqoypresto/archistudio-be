@@ -127,10 +127,25 @@ export const AppErrors = {
     status: StatusCodes.BAD_REQUEST,
     message: "Rentang tanggal maksimal 7 hari kalender.",
   },
-  INVALID_STORAGE_KEY: {
-    code: "INVALID_STORAGE_KEY",
+  INVALID_FILE_REFERENCE: {
+    code: "INVALID_FILE_REFERENCE",
     status: StatusCodes.BAD_REQUEST,
-    message: "Referensi file foto tidak valid atau bukan milik area ini.",
+    message: "Referensi file tidak valid atau bukan milik sesi/entitas ini.",
+  },
+  UPLOAD_SESSION_EXPIRED: {
+    code: "UPLOAD_SESSION_EXPIRED",
+    status: StatusCodes.CONFLICT,
+    message: "Sesi upload sudah kedaluwarsa. Pilih kembali file untuk membuat sesi baru.",
+  },
+  UPLOAD_OFFSET_CONFLICT: {
+    code: "UPLOAD_OFFSET_CONFLICT",
+    status: StatusCodes.CONFLICT,
+    message: "Posisi upload berubah. Periksa status sesi lalu lanjutkan dari byte yang dikonfirmasi server.",
+  },
+  STORAGE_UNAVAILABLE: {
+    code: "STORAGE_UNAVAILABLE",
+    status: StatusCodes.SERVICE_UNAVAILABLE,
+    message: "Google Drive tidak dapat dijangkau atau kredensial Drive belum disetel. Coba lagi beberapa saat.",
   },
   VALIDATION_ERROR: {
     code: "VALIDATION_ERROR",

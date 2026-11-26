@@ -5,7 +5,7 @@ import { paginationQuerySchema } from "../../validations/pagination.validation.j
 const DATE_YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
 
 const photoInputSchema = z.object({
-  storageKey: z.string().trim().min(1, "Storage key foto wajib diisi."),
+  storedFileId: z.string().uuid("ID file foto tidak valid."),
   caption: z.string().trim().max(250).nullable().optional(),
   sortOrder: z.number().int().nonnegative(),
   takenAt: z.string().trim().max(40).nullable().optional(),

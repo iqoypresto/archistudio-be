@@ -15,7 +15,7 @@ export async function fetchProjectPeriod(projectId: string, from: Date, to: Date
           reports: {
             where: { reportDate: { gte: from, lte: to }, status: ReportStatus.SUBMITTED },
             orderBy: { reportDate: "asc" },
-            include: { photos: { orderBy: { sortOrder: "asc" } } },
+            include: { photos: { orderBy: { sortOrder: "asc" }, include: { storedFile: true } } },
           },
         },
       },
@@ -35,7 +35,7 @@ export async function fetchProjectAndAreas(projectId: string, reportDateUtc: Dat
           id: true, code: true, name: true,
           assignments: { orderBy: { startDate: "asc" }, select: { startDate: true, endDate: true } },
           reports: { where: { reportDate: reportDateUtc, status: ReportStatus.SUBMITTED },
-            include: { photos: { orderBy: { sortOrder: "asc" } } } },
+            include: { photos: { orderBy: { sortOrder: "asc" }, include: { storedFile: true } } } },
         },
       },
     },

@@ -11,7 +11,6 @@ import {
 } from "./report.guard.js";
 import {
   assertSubmitCompleteness,
-  assertValidStorageKeys,
   buildRevisionSnapshotJson,
 } from "./report.helper.js";
 import type { DailyReportDetail, ListReportsQuery, ReviseReportBody } from "./report.type.js";
@@ -44,7 +43,7 @@ export class ReportService {
         "Project sudah selesai atau diarsipkan sehingga laporan bersifat baca saja hingga dipulihkan oleh Owner.",
       );
     }
-    if (body.photos) assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
+    if (body.photos) await ReportService.assertRevisionPhotos(body.photos.map((photo) => photo.storedFileId), existing, user.id);
     const photos = await enrichReportPhotoMetadata(body.photos, existing.area.project.timezone);
     const complete = buildMergedCompletenessInput(existing, body);
     assertSubmitCompleteness(complete);
@@ -60,5 +59,18 @@ export class ReportService {
       revisedAt: now,
     });
     return hydrateReportDetail(revised);
+  }
+
+  private static async assertRevisionPhotos(
+    ids: string[],
+    existing: NonNullable<Awaited<ReturnType<typeof ReportRepository.findReportDetailById>>>,
+    userId: string,
+  ): Promise<void> {
+    const currentIds = new Set(existing.photos.map((photo) => photo.storedFileId));
+    const requestedNewIds = ids.filter((id) => !currentIds.has(id));
+    const newIds = [...new Set(requestedNewIds)];
+    if (newIds.length !== requestedNewIds.length) throw new ResponseError("INVALID_FILE_REFERENCE");
+    const valid = await ReportRepository.findReadyRevisionPhotoIds(existing.id, newIds, userId);
+    if (valid.length !== newIds.length) throw new ResponseError("INVALID_FILE_REFERENCE");
   }
 }

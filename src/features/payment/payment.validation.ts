@@ -5,10 +5,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const PHONE_REGEX = /^[0-9+\-\s()]{6,25}$/;
 
 const paymentProofSchema = z.object({
-  storageKey: z.string().trim().min(1, "Kunci file bukti wajib diisi.").max(500),
-  fileName: z.string().trim().min(1, "Nama file bukti wajib diisi.").max(255),
-  mimeType: z.string().trim().min(1, "Tipe file bukti wajib diisi.").max(100),
-  sizeBytes: z.number().int().positive("Ukuran file bukti harus lebih dari 0 byte."),
+  storedFileId: z.string().uuid("ID file bukti tidak valid."),
 });
 
 export class PaymentValidation {

@@ -1,10 +1,11 @@
 import { parseDateOnlyUtc } from "../../helpers/date.helper.js";
+import { StoragePurpose, StorageTargetType } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { StorageAdapter } from "../../utils/storage/storage.adapter.js";
+import { StoredFileService } from "../upload/stored-file.service.js";
+import { StoredFileRepository } from "../upload/stored-file.repository.js";
 import {
   assertOwnerPaymentAccess,
-  assertValidPaymentProof,
   formatPayeeItem,
   formatPaymentRecord,
   type RawPaymentRecord,
@@ -21,10 +22,7 @@ import type {
 } from "./payment.type.js";
 
 async function hydrateSingleRecord(record: RawPaymentRecord): Promise<PaymentRecordItem> {
-  const proofViewUrl = record.proofStorageKey
-    ? await StorageAdapter.createSignedViewUrl(record.proofStorageKey)
-    : null;
-  return formatPaymentRecord(record, proofViewUrl);
+  return formatPaymentRecord(record);
 }
 
 export class PaymentService {
@@ -55,7 +53,7 @@ export class PaymentService {
     return formatPayeeItem(created);
   }
 
-  /** Mengambil daftar catatan pembayaran per orang beserta signed proofViewUrl (US-17, BR-36). */
+  /** Mengambil daftar catatan pembayaran per orang beserta path konten bukti privat (US-17, BR-36). */
   static async getRecordsByPerson(
     actor: AuthenticatedUser,
     personId: string,
@@ -68,14 +66,7 @@ export class PaymentService {
     }
 
     const records = await PaymentRepository.findRecordsByPersonId(personId, query.status);
-    const keys = records
-      .map((item) => item.proofStorageKey)
-      .filter((key): key is string => Boolean(key));
-    const urlMap = keys.length > 0 ? await StorageAdapter.createSignedViewUrlsMap(keys) : {};
-
-    return records.map((record) =>
-      formatPaymentRecord(record, record.proofStorageKey ? (urlMap[record.proofStorageKey] ?? null) : null),
-    );
+    return records.map(formatPaymentRecord);
   }
 
   /** Menambahkan catatan pembayaran baru untuk penerima terpilih (US-17, AC-17.1, BR-36). */
@@ -89,7 +80,10 @@ export class PaymentService {
     if (!person) {
       throw new ResponseError("RESOURCE_NOT_FOUND", "Data penerima pembayaran tidak ditemukan.");
     }
-    assertValidPaymentProof(personId, dto.proof);
+    if (dto.proof) await StoredFileService.assertAttachable({
+      storedFileId: dto.proof.storedFileId, purpose: StoragePurpose.PAYMENT_PROOF,
+      targetType: StorageTargetType.PAYEE, targetId: personId, uploadedById: actor.id,
+    });
 
     const created = await PaymentRepository.createRecord({
       payeeId: personId,
@@ -97,10 +91,7 @@ export class PaymentService {
       amount: dto.amount,
       recordDate: parseDateOnlyUtc(dto.recordDate),
       dueDate: dto.dueDate ? parseDateOnlyUtc(dto.dueDate) : null,
-      proofStorageKey: dto.proof?.storageKey ?? null,
-      proofFileName: dto.proof?.fileName ?? null,
-      proofMimeType: dto.proof?.mimeType ?? null,
-      proofSizeBytes: dto.proof?.sizeBytes ?? null,
+      proofStoredFileId: dto.proof?.storedFileId ?? null,
       createdById: actor.id,
     });
     return hydrateSingleRecord(created);
@@ -117,7 +108,12 @@ export class PaymentService {
     if (!existing) {
       throw new ResponseError("RESOURCE_NOT_FOUND", "Catatan pembayaran tidak ditemukan.");
     }
-    assertValidPaymentProof(existing.payeeId, dto.proof);
+    if (dto.proof?.storedFileId && dto.proof.storedFileId !== existing.proofStoredFileId) {
+      await StoredFileService.assertAttachable({
+        storedFileId: dto.proof.storedFileId, purpose: StoragePurpose.PAYMENT_PROOF,
+        targetType: StorageTargetType.PAYEE, targetId: existing.payeeId, uploadedById: actor.id,
+      });
+    }
 
     const updated = await PaymentRepository.updateRecord(recordId, {
       ...(dto.status && { status: dto.status }),
@@ -127,12 +123,12 @@ export class PaymentService {
         dueDate: dto.dueDate ? parseDateOnlyUtc(dto.dueDate) : null,
       }),
       ...(dto.proof !== undefined && {
-        proofStorageKey: dto.proof?.storageKey ?? null,
-        proofFileName: dto.proof?.fileName ?? null,
-        proofMimeType: dto.proof?.mimeType ?? null,
-        proofSizeBytes: dto.proof?.sizeBytes ?? null,
+        proofStoredFileId: dto.proof?.storedFileId ?? null,
       }),
     });
+    if (dto.proof !== undefined && existing.proofStoredFileId && existing.proofStoredFileId !== (dto.proof?.storedFileId ?? null)) {
+      await StoredFileRepository.markDeletePending(existing.proofStoredFileId);
+    }
     return hydrateSingleRecord(updated);
   }
 }

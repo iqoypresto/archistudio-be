@@ -7,10 +7,7 @@ export type CreateCommsDTO = z.infer<typeof CommsValidation.BODY.create>;
 export type UpdateCommsDTO = z.infer<typeof CommsValidation.BODY.update>;
 
 export interface CommsAttachmentInput {
-  storageKey: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
+  storedFileId: string;
 }
 
 export interface CommsActorSummary {
@@ -26,11 +23,11 @@ export interface CommsEntryItem {
   entryDate: string;
   subject: string;
   note: string | null;
-  attachmentKey: string | null;
+  attachmentStoredFileId: string | null;
   attachmentName: string | null;
   attachmentMime: string | null;
   attachmentBytes: number | null;
-  attachmentViewUrl: string | null;
+  attachmentContentPath: string | null;
   createdBy: CommsActorSummary;
   updatedBy: CommsActorSummary | null;
   createdAt: Date;

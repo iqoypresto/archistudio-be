@@ -75,11 +75,11 @@ export class DashboardOverviewRepository {
         where: { direction: "OUTBOUND", createdAt: { gte: since }, project: { deletedAt: null } },
       }),
       prisma.drawing.count({
-        where: { archivedAt: null, uploadedAt: { gte: since }, project: { deletedAt: null } },
+        where: { archivedAt: null, storedFile: { uploadedAt: { gte: since } }, project: { deletedAt: null } },
       }),
       includeOwnerMetrics
         ? prisma.projectDocument.count({
-            where: { uploadedAt: { gte: since }, project: { deletedAt: null } },
+            where: { storedFile: { uploadedAt: { gte: since } }, project: { deletedAt: null } },
           })
         : Promise.resolve(null),
       includeOwnerMetrics

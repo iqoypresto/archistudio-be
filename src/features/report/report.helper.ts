@@ -4,7 +4,6 @@ import type { ReportDetailRecord, ReportListRecord } from "./report.prisma.js";
 import type {
   DailyReportDetail,
   DailyReportListItem,
-  ReportPhotoInput,
   ReportSnapshotJson,
 } from "./report.type.js";
 
@@ -20,21 +19,6 @@ export function buildReportNumber(
 ): string {
   const compactDate = reportDate.replaceAll("-", "");
   return `LH/${projectCode.toUpperCase()}/${areaCode.toUpperCase()}/${compactDate}`;
-}
-
-/** Memastikan seluruh storageKey foto berada di bawah prefix area & project terkait. */
-export function assertValidStorageKeys(
-  photos: ReportPhotoInput[],
-  projectId: string,
-  areaId: string,
-): void {
-  const expectedPrefix = `projects/${projectId}/areas/${areaId}/`;
-  const invalid = photos.some(
-    (p) => !p.storageKey.startsWith(expectedPrefix) || p.storageKey.includes(".."),
-  );
-  if (invalid) {
-    throw new ResponseError("INVALID_STORAGE_KEY");
-  }
 }
 
 /** Memvalidasi kelengkapan laporan sebelum dikirim sesuai tipe WORK / NO_WORK (BR-15, BR-16, BR-19). */
@@ -104,10 +88,7 @@ export function mapReportListItem(record: ReportListRecord): DailyReportListItem
   };
 }
 
-export function mapReportDetail(
-  record: ReportDetailRecord,
-  signedUrlMap: Record<string, string>,
-): DailyReportDetail {
+export function mapReportDetail(record: ReportDetailRecord): DailyReportDetail {
   return {
     ...mapReportListItem({ ...record, _count: { photos: record.photos.length } }),
     progressText: record.progressText,
@@ -121,12 +102,15 @@ export function mapReportDetail(
     revisedAt: record.revisedAt ? record.revisedAt.toISOString() : null,
     photos: record.photos.map((photo) => ({
       id: photo.id,
-      storageKey: photo.storageKey,
-      signedViewUrl: signedUrlMap[photo.storageKey] ?? "",
+      storedFileId: photo.storedFileId,
+      contentPath: `/files/${photo.storedFileId}/content`,
+      fileName: photo.storedFile.fileName,
+      contentType: photo.storedFile.mimeType,
+      fileSizeBytes: photo.storedFile.sizeBytes,
       caption: photo.caption,
       sortOrder: photo.sortOrder,
       takenAt: photo.takenAt ? photo.takenAt.toISOString() : null,
-      uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+      uploadedAt: photo.storedFile.uploadedAt?.toISOString() ?? null,
     })),
     revisions: record.revisions.map((rev) => ({
       id: rev.id,
@@ -158,11 +142,11 @@ export function buildRevisionSnapshotJson(
     signedByTitle: record.signedByTitle,
     photos: record.photos.map((photo) => ({
       id: photo.id,
-      storageKey: photo.storageKey,
+      storedFileId: photo.storedFileId,
       caption: photo.caption,
       sortOrder: photo.sortOrder,
       takenAt: photo.takenAt ? photo.takenAt.toISOString() : null,
-      uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+      uploadedAt: photo.storedFile.uploadedAt?.toISOString() ?? null,
     })),
   };
 }

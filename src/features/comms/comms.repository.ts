@@ -55,10 +55,7 @@ export class CommsRepository {
     entryDate: Date;
     subject: string;
     note: string | null;
-    attachmentKey: string | null;
-    attachmentName: string | null;
-    attachmentMime: string | null;
-    attachmentBytes: number | null;
+    attachmentStoredFileId: string | null;
     createdById: string;
   }): Promise<RawCommsEntry> {
     return prisma.commsEntry.create({ data, select: commsSelect });

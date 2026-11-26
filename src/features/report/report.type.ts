@@ -22,7 +22,7 @@ export interface ReportSnapshotJson {
   signedByTitle: string | null;
   photos: Array<{
     id: string;
-    storageKey: string;
+    storedFileId: string;
     caption: string | null;
     sortOrder: number;
     takenAt: string | null;
@@ -31,17 +31,19 @@ export interface ReportSnapshotJson {
 }
 
 export interface ReportPhotoInput {
-  storageKey: string;
+  storedFileId: string;
   caption?: string | null;
   sortOrder: number;
   takenAt?: string | null;
-  uploadedAt?: string | null;
 }
 
 export interface DailyReportPhotoDto {
   id: string;
-  storageKey: string;
-  signedViewUrl: string;
+  storedFileId: string;
+  contentPath: string;
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
   caption: string | null;
   sortOrder: number;
   takenAt: string | null;
