@@ -29,6 +29,8 @@ export interface PaymentPayeeItem {
     totalPaid: number;
     totalUnpaid: number;
     latestRecordDate: string | null;
+    overdueUnpaidCount?: number;
+    nearestDueDate?: string | null;
   };
 }
 

@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { COMMON_MESSAGES } from "../../constants/message.constant.js";
+import { ResponseHelper } from "../../helpers/response.helper.js";
 import { validate } from "../../validations/validate.js";
 import { PdfExportService } from "./pdf-export.service.js";
 import { exportDailyReportPdfQuerySchema, exportDailyReportRangePdfQuerySchema, exportMonthlyReportPdfQuerySchema } from "./pdf-export.validation.js";
@@ -31,6 +33,13 @@ export class PdfExportController {
   static async exportMonthlyReportPdf(req: Request, res: Response) {
     const query = validate(exportMonthlyReportPdfQuerySchema, req.query);
     sendPdf(res, await PdfExportPeriodService.monthly(query.projectId, query.month));
+  }
+
+  static async getMonthlyReportSummary(req: Request, res: Response) {
+    const query = validate(exportMonthlyReportPdfQuerySchema, req.query);
+    const summary = await PdfExportPeriodService.monthlySummary(query.projectId, query.month);
+    if (!summary) throw new ResponseError("RESOURCE_NOT_FOUND");
+    ResponseHelper.ok(res, COMMON_MESSAGES.FETCHED, summary);
   }
 
   static async exportDailyReportRangePdf(req: Request, res: Response) {

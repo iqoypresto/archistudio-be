@@ -72,7 +72,13 @@ export class ProjectDocumentService {
     }
     assertDocumentProjectMutable(existing.project);
 
-    await StorageAdapter.deleteObject(existing.storageKey);
+    try {
+      await StorageAdapter.deleteObject(existing.storageKey);
+    } catch (error) {
+      const code = (error as { name?: string; Code?: string } | null)?.name ??
+        (error as { Code?: string } | null)?.Code;
+      if (code !== "NoSuchKey" && code !== "NotFound") throw error;
+    }
     await ProjectDocumentRepository.deleteById(documentId);
     return { id: documentId, deleted: true };
   }

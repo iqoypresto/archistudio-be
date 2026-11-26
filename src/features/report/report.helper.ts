@@ -92,11 +92,14 @@ export function mapReportListItem(record: ReportListRecord): DailyReportListItem
       code: record.area.project.code,
       name: record.area.project.name,
       timezone: record.area.project.timezone,
+      status: record.area.project.status,
+      archivedAt: record.area.project.archivedAt ? record.area.project.archivedAt.toISOString() : null,
     },
     supervisor: {
       id: record.supervisor.id,
       name: record.supervisor.name,
       jobTitle: record.supervisor.jobTitle,
+      role: record.supervisor.role,
     },
   };
 }

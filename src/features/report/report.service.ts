@@ -1,4 +1,4 @@
-import { Prisma, ReportStatus, Role } from "@prisma/client";
+import { Prisma, ProjectStatus, ReportStatus, Role } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { ReportRepository } from "./report.repository.js";
@@ -34,6 +34,15 @@ export class ReportService {
     if (!existing) throw new ResponseError("RESOURCE_NOT_FOUND");
     if (existing.status !== ReportStatus.SUBMITTED) {
       throw new ResponseError("VALIDATION_ERROR", "Hanya laporan terkirim yang dapat direvisi oleh Owner.");
+    }
+    if (
+      existing.area.project.status === ProjectStatus.SELESAI ||
+      existing.area.project.archivedAt != null
+    ) {
+      throw new ResponseError(
+        "PROJECT_ALREADY_COMPLETED",
+        "Project sudah selesai atau diarsipkan sehingga laporan bersifat baca saja hingga dipulihkan oleh Owner.",
+      );
     }
     if (body.photos) assertValidStorageKeys(body.photos, existing.area.project.id, existing.area.id);
     const photos = await enrichReportPhotoMetadata(body.photos, existing.area.project.timezone);

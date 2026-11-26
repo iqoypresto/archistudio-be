@@ -67,17 +67,25 @@ export class ProjectService {
     const supervisorUserId = actor.role === "SUPERVISOR" ? actor.id : undefined;
     const siteManagerUserId = actor.role === "SITE_MANAGER" ? actor.id : undefined;
 
-    const [projects, total] = await ProjectRepository.findManyAndCount({
-      skip,
-      take,
-      search: query.search,
-      status: query.status,
-      sortBy: query.sortBy,
-      sortOrder: query.sortOrder,
-      supervisorUserId,
-      siteManagerUserId,
-    });
-    return { projects, meta: PaginationHelper.buildMeta(page, pageSize, total) };
+    const isOffice = actor.role === "OWNER" || actor.role === "ADMIN";
+    const [[projects, total], statusCounts] = await Promise.all([
+      ProjectRepository.findManyAndCount({
+        skip,
+        take,
+        search: query.search,
+        status: query.status,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+        supervisorUserId,
+        siteManagerUserId,
+      }),
+      isOffice ? ProjectRepository.countActiveByStatus() : Promise.resolve(undefined),
+    ]);
+    return {
+      projects,
+      meta: PaginationHelper.buildMeta(page, pageSize, total),
+      ...(statusCounts ? { statusCounts } : {}),
+    };
   }
 
   /** Mengambil daftar Archive Project (SELESAI & arsip manual) untuk OWNER/ADMIN (US-22, BR-39). */

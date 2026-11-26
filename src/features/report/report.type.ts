@@ -1,4 +1,4 @@
-import type { ReportStatus, ReportType, WeatherType } from "@prisma/client";
+import type { ProjectStatus, ReportStatus, ReportType, Role, WeatherType } from "@prisma/client";
 import type { z } from "zod";
 import type { ReportValidation } from "./report.validation.js";
 
@@ -72,8 +72,15 @@ export interface DailyReportListItem {
   signedByTitle: string | null;
   photoCount: number;
   area: { id: string; code: string; name: string };
-  project: { id: string; code: string; name: string; timezone: string };
-  supervisor: { id: string; name: string; jobTitle: string };
+  project: {
+    id: string;
+    code: string;
+    name: string;
+    timezone: string;
+    status?: ProjectStatus;
+    archivedAt?: string | null;
+  };
+  supervisor: { id: string; name: string; jobTitle: string; role?: Role };
 }
 
 export interface DailyReportDetail extends DailyReportListItem {

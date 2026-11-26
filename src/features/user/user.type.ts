@@ -16,6 +16,8 @@ export interface UserListItem {
   role: Role;
   jobTitle: string;
   isActive: boolean;
+  activeAreaCount?: number;
+  managedProjectCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,4 +26,5 @@ export interface UserSummaryCount {
   total: number;
   active: number;
   inactive: number;
+  byRole: Record<Role, number>;
 }

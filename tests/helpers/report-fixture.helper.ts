@@ -1,4 +1,4 @@
-import { ReportStatus, ReportType, Role, WeatherType } from "@prisma/client";
+import { ProjectStatus, ReportStatus, ReportType, Role, WeatherType } from "@prisma/client";
 import { signAccessToken } from "../../src/utils/auth/jwt.util.js";
 
 export const TEST_AREA_ID = "11111111-1111-4111-8111-111111111111";
@@ -23,6 +23,8 @@ export function makeReportRecord(overrides?: {
   reportType?: ReportType;
   isLate?: boolean;
   timezone?: string;
+  projectStatus?: ProjectStatus;
+  projectArchivedAt?: Date | null;
   submittedDates?: Date[];
   photosCount?: number;
 }) {
@@ -74,6 +76,8 @@ export function makeReportRecord(overrides?: {
         code: "VLA01",
         name: "Villa Ubud",
         timezone: overrides?.timezone ?? "Asia/Jakarta",
+        status: overrides?.projectStatus ?? ProjectStatus.BERJALAN,
+        archivedAt: overrides?.projectArchivedAt ?? null,
         startDate: new Date("2026-11-16T00:00:00.000Z"),
         endDate: null,
         routineHolidays: [0],
@@ -90,7 +94,12 @@ export function makeReportRecord(overrides?: {
       unlocks: [],
       reports: (overrides?.submittedDates ?? []).map((d) => ({ reportDate: d })),
     },
-    supervisor: { id: "sup-1", name: "Budi Pengawas", jobTitle: "Supervisor Lapangan" },
+    supervisor: {
+      id: "sup-1",
+      name: "Budi Pengawas",
+      jobTitle: "Supervisor Lapangan",
+      role: Role.SUPERVISOR,
+    },
     photos,
     revisions: [],
   };

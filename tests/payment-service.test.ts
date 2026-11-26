@@ -79,12 +79,23 @@ describe("TASK-16 Pembayaran Freelance/Agent Global (US-17, AC-17.1, BR-36)", ()
         createdAt: now,
         updatedAt: now,
         payments: [
-          { status: PaymentStatus.PAID, amount: new Prisma.Decimal("1000000"), recordDate: now },
-          { status: PaymentStatus.UNPAID, amount: new Prisma.Decimal("500000"), recordDate: now },
+          { status: PaymentStatus.PAID, amount: new Prisma.Decimal("1000000"), recordDate: now, dueDate: null },
+          { status: PaymentStatus.UNPAID, amount: new Prisma.Decimal("500000"), recordDate: now, dueDate: new Date("2026-11-10T00:00:00.000Z") },
         ],
       },
     ]);
-    const listRes = await invokeApp<ApiEnvelope<Array<{ summary: { totalPaid: number; totalUnpaid: number } }>>>(app, {
+    const listRes = await invokeApp<
+      ApiEnvelope<
+        Array<{
+          summary: {
+            totalPaid: number;
+            totalUnpaid: number;
+            overdueUnpaidCount?: number;
+            nearestDueDate?: string | null;
+          };
+        }>
+      >
+    >(app, {
       method: "GET",
       path: "/api/v1/payments/people?type=FREELANCE",
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
@@ -92,6 +103,8 @@ describe("TASK-16 Pembayaran Freelance/Agent Global (US-17, AC-17.1, BR-36)", ()
     expect(listRes.status).toBe(200);
     expect(listRes.body.data?.[0]?.summary.totalPaid).toBe(1000000);
     expect(listRes.body.data?.[0]?.summary.totalUnpaid).toBe(500000);
+    expect(listRes.body.data?.[0]?.summary.overdueUnpaidCount).toBe(1);
+    expect(listRes.body.data?.[0]?.summary.nearestDueDate).toBe("2026-11-10");
   });
 
   it("[AC-17.1 / BR-36] OWNER membuat & mengubah catatan pembayaran serta menghidrasi proofViewUrl", async () => {

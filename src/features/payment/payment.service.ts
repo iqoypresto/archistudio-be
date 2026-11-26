@@ -38,7 +38,7 @@ export class PaymentService {
       type: query.type,
       search: query.search,
     });
-    return people.map(formatPayeeItem);
+    return people.map((item) => formatPayeeItem(item));
   }
 
   /** Menambahkan orang (Freelance/Agent) baru tanpa relasi project (US-17, BR-36). */

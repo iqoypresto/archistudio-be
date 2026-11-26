@@ -1,6 +1,6 @@
-import { Prisma, type Role } from "@prisma/client";
+import { Prisma, ProjectStatus, type Role } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
-import type { UserListItem } from "./user.type.js";
+import type { UserListItem, UserSummaryCount } from "./user.type.js";
 
 const userSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -12,7 +12,42 @@ const userSelect = Prisma.validator<Prisma.UserSelect>()({
   isActive: true,
   createdAt: true,
   updatedAt: true,
+  _count: {
+    select: {
+      supervisorAssigns: {
+        where: {
+          endDate: null,
+          area: {
+            deletedAt: null,
+            project: {
+              deletedAt: null,
+              archivedAt: null,
+              status: { not: ProjectStatus.SELESAI },
+            },
+          },
+        },
+      },
+      managedProjects: {
+        where: {
+          deletedAt: null,
+          archivedAt: null,
+          status: { not: ProjectStatus.SELESAI },
+        },
+      },
+    },
+  },
 });
+
+type RawUserRow = Prisma.UserGetPayload<{ select: typeof userSelect }>;
+
+function mapUserRow(row: RawUserRow): UserListItem {
+  const { _count, ...rest } = row;
+  return {
+    ...rest,
+    activeAreaCount: _count.supervisorAssigns,
+    managedProjectCount: _count.managedProjects,
+  };
+}
 
 export interface FindUsersParams {
   skip: number;
@@ -44,7 +79,7 @@ export class UserRepository {
       [params.sortBy ?? "createdAt"]: params.sortOrder ?? "desc",
     };
 
-    return Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.user.findMany({
         where,
         select: userSelect,
@@ -54,14 +89,45 @@ export class UserRepository {
       }),
       prisma.user.count({ where }),
     ]);
+    return [rows.map(mapUserRow), total];
+  }
+
+  /** Mengambil ringkasan global jumlah anggota per status aktif dan peran. */
+  static async getGlobalSummary(): Promise<UserSummaryCount> {
+    const groups = await prisma.user.groupBy({
+      by: ["role", "isActive"],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    });
+
+    let total = 0;
+    let active = 0;
+    let inactive = 0;
+    const byRole: Record<Role, number> = {
+      OWNER: 0,
+      ADMIN: 0,
+      SITE_MANAGER: 0,
+      SUPERVISOR: 0,
+    };
+
+    for (const row of groups) {
+      const count = row._count._all;
+      total += count;
+      byRole[row.role] += count;
+      if (row.isActive) active += count;
+      else inactive += count;
+    }
+
+    return { total, active, inactive, byRole };
   }
 
   /** Mencari user aktif/nonaktif (belum di-soft delete) berdasarkan ID. */
   static async findById(id: string): Promise<UserListItem | null> {
-    return prisma.user.findFirst({
+    const row = await prisma.user.findFirst({
       where: { id, deletedAt: null },
       select: userSelect,
     });
+    return row ? mapUserRow(row) : null;
   }
 
   /** Memeriksa duplikasi username atau nomor HP pada akun lain. */
@@ -102,25 +168,17 @@ export class UserRepository {
     role: Role;
     jobTitle: string;
   }): Promise<UserListItem> {
-    return prisma.user.create({
-      data: {
-        ...data,
-        isActive: true,
-      },
+    const created = await prisma.user.create({
+      data: { ...data, isActive: true },
       select: userSelect,
     });
+    return mapUserRow(created);
   }
 
   /** Memperbarui data pengguna. */
-  static async update(
-    id: string,
-    data: Prisma.UserUpdateInput,
-  ): Promise<UserListItem> {
-    return prisma.user.update({
-      where: { id },
-      data,
-      select: userSelect,
-    });
+  static async update(id: string, data: Prisma.UserUpdateInput): Promise<UserListItem> {
+    const updated = await prisma.user.update({ where: { id }, data, select: userSelect });
+    return mapUserRow(updated);
   }
 
   /** Me-reset kata sandi dan mencabut seluruh sesi token user terkait secara atomik. */
@@ -140,7 +198,7 @@ export class UserRepository {
         data: { revokedAt: new Date() },
       });
 
-      return updatedUser;
+      return mapUserRow(updatedUser);
     });
   }
 
@@ -163,7 +221,7 @@ export class UserRepository {
         });
       }
 
-      return updatedUser;
+      return mapUserRow(updatedUser);
     });
   }
 }

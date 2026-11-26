@@ -1,24 +1,29 @@
-import { ReportStatus } from "@prisma/client";
+import { ProjectStatus, ReportStatus } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
+import { DashboardOverviewRepository } from "./dashboard-overview.repository.js";
 
 export class DashboardRepository {
-  /** Menghitung jumlah proyek aktif (tidak berstatus soft-deleted). */
+  /** Menghitung jumlah proyek aktif berstatus BERJALAN (non-arsip & non-selesai). */
   static async countActiveProjects(projectId?: string) {
     return prisma.project.count({
       where: {
         deletedAt: null,
+        archivedAt: null,
+        status: ProjectStatus.BERJALAN,
         ...(projectId ? { id: projectId } : {}),
       },
     });
   }
 
-  /** Mengambil seluruh area aktif beserta project, penugasan aktif, laporan, dan unlock. */
+  /** Mengambil seluruh area aktif pada proyek BERJALAN beserta penugasan, laporan, dan unlock. */
   static async findActiveAreasWithDetails(projectId?: string) {
     return prisma.area.findMany({
       where: {
         deletedAt: null,
         project: {
           deletedAt: null,
+          archivedAt: null,
+          status: ProjectStatus.BERJALAN,
           ...(projectId ? { id: projectId } : {}),
         },
       },
@@ -55,6 +60,8 @@ export class DashboardRepository {
                 id: true,
                 name: true,
                 jobTitle: true,
+                role: true,
+                isActive: true,
               },
             },
           },
@@ -83,7 +90,12 @@ export class DashboardRepository {
     });
   }
 
-  /** Mengambil rekap seluruh laporan terkirim untuk kalkulasi keterlambatan supervisor. */
+  /** Mengambil ringkasan lintas sistem untuk Dashboard Office. */
+  static async getSystemOverview(includeOwnerMetrics: boolean, now = new Date()) {
+    return DashboardOverviewRepository.getSystemOverview(includeOwnerMetrics, now);
+  }
+
+  /** Mengambil rekap laporan terkirim untuk kalkulasi keterlambatan per pengawas (BR-21). */
   static async findSubmittedReportsForLateness(params: {
     projectId?: string;
     dateFrom?: Date;
@@ -92,7 +104,13 @@ export class DashboardRepository {
     return prisma.dailyReport.findMany({
       where: {
         status: ReportStatus.SUBMITTED,
-        ...(params.projectId ? { area: { projectId: params.projectId } } : {}),
+        area: {
+          deletedAt: null,
+          project: {
+            deletedAt: null,
+            ...(params.projectId ? { id: params.projectId } : {}),
+          },
+        },
         ...(params.dateFrom || params.dateTo
           ? {
               reportDate: {
@@ -110,6 +128,8 @@ export class DashboardRepository {
             id: true,
             name: true,
             username: true,
+            role: true,
+            jobTitle: true,
           },
         },
       },

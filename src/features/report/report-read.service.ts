@@ -16,7 +16,11 @@ export class ReportReadService {
     }
     const scope = buildReportsWhere(query, user);
     await ReportArchiveService.process(scope);
-    const where = archive ? { AND: [scope, { archivedAt: { not: null }, status: "SUBMITTED" as const }] } : scope;
+    const where = archive || query.archiveState === "archived"
+      ? { AND: [scope, { archivedAt: { not: null }, status: "SUBMITTED" as const }] }
+      : query.archiveState === "active"
+        ? { AND: [scope, { archivedAt: null, status: "SUBMITTED" as const }] }
+        : scope;
     const { page, pageSize, skip, take } = PaginationHelper.getSkipTake(query.page, query.pageSize);
     const [rows, totalItems] = await ReportRepository.findReportsPaginated({
       where, skip, take, orderBy: { [query.sortBy]: query.sortOrder },

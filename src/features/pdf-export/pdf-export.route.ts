@@ -10,4 +10,5 @@ pdfExportRouter.use(AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN));
 
 pdfExportRouter.get("/daily-report-pdf", PdfExportController.exportDailyReportPdf);
 pdfExportRouter.get("/monthly-report-pdf", PdfExportController.exportMonthlyReportPdf);
+pdfExportRouter.get("/monthly-report-summary", PdfExportController.getMonthlyReportSummary);
 pdfExportRouter.get("/daily-report-range-pdf", PdfExportController.exportDailyReportRangePdf);

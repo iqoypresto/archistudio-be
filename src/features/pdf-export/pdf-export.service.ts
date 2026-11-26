@@ -80,6 +80,12 @@ export class PdfExportService {
       projectEnd: project.endDate,
       routineHolidays: project.routineHolidays,
     });
+    if (requiredAreas.length === 0) {
+      throw new ResponseError(
+        "VALIDATION_ERROR",
+        "Tidak ada area wajib lapor pada tanggal yang dipilih (hari libur rutin atau di luar jadwal proyek).",
+      );
+    }
     const submittedAreaIds = new Set(project.areas.filter((area) => area.reports.length > 0).map((area) => area.id));
     const incomplete = requiredAreas.filter((area) => !submittedAreaIds.has(area.id));
     if (incomplete.length > 0) {

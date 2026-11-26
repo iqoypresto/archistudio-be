@@ -18,10 +18,10 @@ export const REPORT_LIST_SELECT = Prisma.validator<Prisma.DailyReportSelect>()({
       id: true,
       code: true,
       name: true,
-      project: { select: { id: true, code: true, name: true, timezone: true } },
+      project: { select: { id: true, code: true, name: true, timezone: true, status: true, archivedAt: true } },
     },
   },
-  supervisor: { select: { id: true, name: true, jobTitle: true } },
+  supervisor: { select: { id: true, name: true, jobTitle: true, role: true } },
   _count: { select: { photos: true } },
 });
 
@@ -38,6 +38,8 @@ export const REPORT_DETAIL_INCLUDE = Prisma.validator<Prisma.DailyReportInclude>
           code: true,
           name: true,
           timezone: true,
+          status: true,
+          archivedAt: true,
           startDate: true,
           endDate: true,
           routineHolidays: true,
@@ -57,7 +59,7 @@ export const REPORT_DETAIL_INCLUDE = Prisma.validator<Prisma.DailyReportInclude>
       },
     },
   },
-  supervisor: { select: { id: true, name: true, jobTitle: true } },
+  supervisor: { select: { id: true, name: true, jobTitle: true, role: true } },
   photos: { orderBy: { sortOrder: "asc" } },
   revisions: {
     orderBy: { revisionNo: "desc" },

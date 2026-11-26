@@ -192,14 +192,22 @@ describe("TASK-03 User Management — Unit & Integration Tests", () => {
           role: Role.SUPERVISOR,
           jobTitle: "Supervisor",
           isActive: true,
+          activeAreaCount: 2,
+          managedProjectCount: 0,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
       ],
       1,
     ]);
+    vi.spyOn(UserRepository, "getGlobalSummary").mockResolvedValue({
+      total: 4,
+      active: 3,
+      inactive: 1,
+      byRole: { OWNER: 1, ADMIN: 1, SITE_MANAGER: 1, SUPERVISOR: 1 },
+    });
 
-    const res = await invokeApp<ApiEnvelope<unknown[]>>(app, {
+    const res = await invokeApp<ApiEnvelope<unknown[]> & { summary?: { total: number } }>(app, {
       method: "GET",
       path: "/api/v1/users?page=1&pageSize=10",
       headers: {
@@ -210,5 +218,24 @@ describe("TASK-03 User Management — Unit & Integration Tests", () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.summary?.total).toBe(4);
+  });
+
+  it("[Wave 1A / AUD-02] menolak penurunan peran akun OWNER oleh dirinya sendiri maupun OWNER lain", async () => {
+    vi.spyOn(UserRepository, "findById").mockResolvedValue({
+      id: ownerActor.id,
+      name: ownerActor.name,
+      username: ownerActor.username,
+      phone: "081200000001",
+      role: Role.OWNER,
+      jobTitle: ownerActor.jobTitle,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      UserService.updateUser(ownerActor, ownerActor.id, { role: "SUPERVISOR" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", statusCode: 403 });
   });
 });

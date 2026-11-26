@@ -1,4 +1,5 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { toBusinessDateString } from "../../helpers/date.helper.js";
 import type { AuthenticatedUser } from "../../types/express.d.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import type {
@@ -30,6 +31,7 @@ export const payeeWithPaymentsSelect = Prisma.validator<Prisma.ExternalPayeeSele
       status: true,
       amount: true,
       recordDate: true,
+      dueDate: true,
     },
     orderBy: { recordDate: "desc" },
   },
@@ -88,11 +90,14 @@ function toMoneyNumber(value: Prisma.Decimal | number): number {
   return Math.round(Number(value) * 100) / 100;
 }
 
-export function formatPayeeItem(raw: RawPayeeRecord): PaymentPayeeItem {
+export function formatPayeeItem(raw: RawPayeeRecord, now = new Date()): PaymentPayeeItem {
+  const todayStr = toBusinessDateString(now, "Asia/Jakarta");
   let paidCount = 0;
   let unpaidCount = 0;
   let totalPaid = 0;
   let totalUnpaid = 0;
+  let overdueUnpaidCount = 0;
+  let nearestDueDate: string | null = null;
 
   for (const item of raw.payments) {
     const amount = toMoneyNumber(item.amount);
@@ -102,6 +107,11 @@ export function formatPayeeItem(raw: RawPayeeRecord): PaymentPayeeItem {
     } else {
       unpaidCount += 1;
       totalUnpaid += amount;
+      const dueStr = item.dueDate ? item.dueDate.toISOString().slice(0, 10) : null;
+      if (dueStr) {
+        if (dueStr < todayStr) overdueUnpaidCount += 1;
+        if (!nearestDueDate || dueStr < nearestDueDate) nearestDueDate = dueStr;
+      }
     }
   }
 
@@ -119,6 +129,8 @@ export function formatPayeeItem(raw: RawPayeeRecord): PaymentPayeeItem {
       totalPaid: toMoneyNumber(totalPaid),
       totalUnpaid: toMoneyNumber(totalUnpaid),
       latestRecordDate: raw.payments[0]?.recordDate.toISOString().slice(0, 10) ?? null,
+      overdueUnpaidCount,
+      nearestDueDate,
     },
   };
 }

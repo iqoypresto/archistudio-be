@@ -1,4 +1,4 @@
-import { ReportStatus, Role, WeatherType } from "@prisma/client";
+import { ProjectStatus, ReportStatus, Role, WeatherType } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app.js";
 import { ReportRepository } from "../src/features/report/report.repository.js";
@@ -151,5 +151,24 @@ describe("TASK-09 Report Detail & Owner Revision Snapshot JSON", () => {
     });
     expect(adminRes.status).toBe(200);
     expect(adminRes.body.data?.signedByName).toBe("Budi Pengawas");
+  });
+
+  it("[Wave 1A / BR-12, BR-39] menolak OWNER merevisi laporan pada proyek yang sudah SELESAI atau di Archive", async () => {
+    vi.spyOn(ReportRepository, "findReportDetailById").mockResolvedValue(
+      makeReportRecord({
+        status: ReportStatus.SUBMITTED,
+        projectStatus: ProjectStatus.SELESAI,
+      }),
+    );
+
+    const res = await invokeApp<ApiEnvelope>(app, {
+      method: "PATCH",
+      path: `/api/v1/office/reports/${TEST_REPORT_ID}/revise`,
+      headers: authHeaderFor(Role.OWNER, "owner-1", "Owner Utama"),
+      body: { changeSummary: "Mencoba revisi proyek selesai", workerCount: 10 },
+    });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error?.code).toBe("PROJECT_ALREADY_COMPLETED");
   });
 });
