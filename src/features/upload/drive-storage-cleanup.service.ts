@@ -1,7 +1,6 @@
 import { logger } from "../../configs/logger.config.js";
-import { cancelDriveUploadSession } from "../../utils/storage/drive-upload.adapter.js";
-import { deleteDriveFile } from "../../utils/storage/drive-file.adapter.js";
 import { decryptDriveSessionUri } from "../../utils/storage/drive-session.crypto.js";
+import { cancelAndDeleteDriveUpload } from "../../utils/storage/drive-cleanup.adapter.js";
 import { UploadSessionRepository } from "./upload-session.repository.js";
 
 const CLEANUP_BATCH_SIZE = 25;
@@ -15,8 +14,11 @@ export class DriveStorageCleanupService {
     for (const file of candidates) {
       try {
         const sessionUri = file.uploadSession?.sessionUriCiphertext;
-        if (sessionUri) await cancelDriveUploadSession(decryptDriveSessionUri(sessionUri));
-        if (file.driveFileId) await deleteDriveFile(file.driveFileId);
+        await cancelAndDeleteDriveUpload({
+          sessionUri: sessionUri ? decryptDriveSessionUri(sessionUri) : null,
+          driveFileId: file.driveFileId,
+          sizeBytes: file.sizeBytes,
+        });
         await UploadSessionRepository.markStoredFileDeleted(file.id);
         filesDeleted += 1;
       } catch (error) {

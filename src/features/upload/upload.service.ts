@@ -1,4 +1,4 @@
-import { DriveUploadSessionStatus, Role, StoragePurpose, StorageTargetType, StoredFileStatus } from "@prisma/client";
+import { DriveUploadSessionStatus, Role, StoragePurpose, StorageTargetType, StoredFileStatus, UploadSessionStatus } from "@prisma/client";
 import { env } from "../../configs/env.config.js";
 import { logger } from "../../configs/logger.config.js";
 import { isCommsAllowedRole } from "../../helpers/access-policy.helper.js";
@@ -6,12 +6,14 @@ import type { AuthenticatedUser } from "../../types/express.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
 import { cancelDriveUploadSession, createDriveUploadSession, getDriveUploadOffset, sendDriveChunk } from "../../utils/storage/drive-upload.adapter.js";
 import { assertDriveFileMatchesStoredFile, deleteDriveFile, downloadDriveFileBuffer, getDriveFileMetadata } from "../../utils/storage/drive-file.adapter.js";
+import { cancelAndDeleteDriveUpload } from "../../utils/storage/drive-cleanup.adapter.js";
 import { decryptDriveSessionUri, encryptDriveSessionUri } from "../../utils/storage/drive-session.crypto.js";
 import { hasExpectedFileSignature, requiresFullContentSignatureCheck } from "../../utils/storage/file-signature.helper.js";
 import { ProjectService } from "../project/project.service.js";
 import { ReportUploadSessionService } from "../report/report-upload-session.service.js";
 import { UploadRepository } from "./upload.repository.js";
 import { UploadSessionRepository } from "./upload-session.repository.js";
+import { buildReportPhotoFileName } from "./report-photo-file-name.js";
 import type { FieldUploadBody, OfficeUploadBody, UploadChunkRange, UploadInitBody, UploadSessionReceipt } from "./upload.type.js";
 
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -36,7 +38,7 @@ function assertFileAllowed(file: { contentType: string; fileSizeBytes: number },
 }
 
 function sanitizeFileName(value: string): string {
-  return value.replace(/[\\/\u0000-\u001f\u007f]/g, "_").trim().slice(0, 255) || "upload";
+  return value.replace(/[\\/\p{Cc}]/gu, "_").trim().slice(0, 255) || "upload";
 }
 
 function assertSupervisorScope(area: Awaited<ReturnType<typeof UploadRepository.findAreaWithAssignments>>, userId: string, reportDate: string): asserts area is NonNullable<typeof area> {
@@ -51,7 +53,15 @@ export class UploadService {
   static async createSession(body: UploadInitBody, user: AuthenticatedUser): Promise<UploadSessionReceipt> {
     const target = await UploadService.resolveTarget(body, user);
     assertFileAllowed(body.file, target.purpose);
-    const fileName = sanitizeFileName(body.file.fileName);
+    const fileName = "reportSessionId" in target
+      ? buildReportPhotoFileName({
+        projectCode: target.projectCode,
+        areaCode: target.areaCode,
+        reportDate: target.reportDate,
+        photoOrder: target.photoOrder,
+        contentType: body.file.contentType,
+      })
+      : sanitizeFileName(body.file.fileName);
     const sessionUri = await createDriveUploadSession({ fileName, mimeType: body.file.contentType, sizeBytes: body.file.fileSizeBytes });
     try {
       const expiresAt = new Date(Date.now() + APP_SESSION_HOURS * 60 * 60 * 1000);
@@ -62,6 +72,7 @@ export class UploadService {
         sessionUriCiphertext: encryptDriveSessionUri(sessionUri), expiresAt,
         ...("reportSessionId" in target && { reportSessionId: target.reportSessionId }),
       });
+      if (!stored) throw new ResponseError("UPLOAD_SESSION_EXPIRED");
       return {
         storedFileId: stored.storedFile.id, uploadSessionId: stored.uploadSession.id,
         chunkSizeBytes: MAX_CHUNK_BYTES, expiresAt: expiresAt.toISOString(), fileName,
@@ -84,7 +95,17 @@ export class UploadService {
     assertSupervisorScope(area, user.id, body.reportDate);
     await ReportUploadSessionService.assertCanSign({ sessionId: body.reportSessionId, areaId: body.areaId, reportDate: body.reportDate }, user);
     if (await UploadRepository.countReportSessionPhotos(body.reportSessionId) >= 10) throw new ResponseError("INVALID_PHOTO_COUNT");
-    return { purpose: StoragePurpose.REPORT_PHOTO, targetType: StorageTargetType.REPORT_UPLOAD_SESSION, targetId: body.reportSessionId, targetQualifier: null, reportSessionId: body.reportSessionId };
+    return {
+      purpose: StoragePurpose.REPORT_PHOTO,
+      targetType: StorageTargetType.REPORT_UPLOAD_SESSION,
+      targetId: body.reportSessionId,
+      targetQualifier: null,
+      reportSessionId: body.reportSessionId,
+      reportDate: body.reportDate,
+      photoOrder: body.photoOrder,
+      projectCode: area.project.code,
+      areaCode: area.code,
+    };
   }
 
   private static async resolveOfficeTarget(body: OfficeUploadBody, user: AuthenticatedUser) {
@@ -129,7 +150,19 @@ export class UploadService {
       id, expectedOffset: range.start, nextOffset: nextOffsetBytes,
       ...(result.complete && result.file.id && { driveFileId: result.file.id }),
     });
-    if (!updated) throw new ResponseError("UPLOAD_OFFSET_CONFLICT");
+    if (!updated) {
+      if (result.complete && result.file.id) {
+        try {
+          if (await UploadSessionRepository.markLateCompletedFileCancelled(id, result.file.id)) {
+            await deleteDriveFile(result.file.id);
+            await UploadSessionRepository.markDeleted(session.storedFileId);
+          }
+        } catch (error) {
+          logger.warn("Late completed upload cleanup is pending", { storedFileId: session.storedFileId, error });
+        }
+      }
+      throw new ResponseError("UPLOAD_OFFSET_CONFLICT");
+    }
     return { nextOffsetBytes, status: result.complete ? DriveUploadSessionStatus.COMPLETED : DriveUploadSessionStatus.ACTIVE };
   }
 
@@ -169,7 +202,8 @@ export class UploadService {
       }
     }
     const uploadedAt = new Date();
-    await UploadSessionRepository.markReady(id, uploadedAt);
+    const ready = await UploadSessionRepository.markReady(id, uploadedAt);
+    if (!ready) throw new ResponseError("INVALID_FILE_REFERENCE", "Sesi laporan sudah dibatalkan atau selesai.");
     return {
       storedFileId: session.storedFileId, uploadSessionId: id, fileName: session.storedFile.fileName,
       contentType: session.storedFile.mimeType, fileSizeBytes: session.storedFile.sizeBytes,
@@ -182,8 +216,11 @@ export class UploadService {
     if (await UploadSessionRepository.hasDomainReference(session.storedFileId)) throw new ResponseError("INVALID_FILE_REFERENCE");
     await UploadSessionRepository.markCancelled(id);
     try {
-      if (session.sessionUriCiphertext) await cancelDriveUploadSession(decryptDriveSessionUri(session.sessionUriCiphertext));
-      if (session.storedFile.driveFileId) await deleteDriveFile(session.storedFile.driveFileId);
+      await cancelAndDeleteDriveUpload({
+        sessionUri: session.sessionUriCiphertext ? decryptDriveSessionUri(session.sessionUriCiphertext) : null,
+        driveFileId: session.storedFile.driveFileId,
+        sizeBytes: session.storedFile.sizeBytes,
+      });
       await UploadSessionRepository.markDeleted(session.storedFileId);
     } catch (error) {
       logger.warn("Drive cleanup is pending", { storedFileId: session.storedFileId, error });
@@ -193,6 +230,10 @@ export class UploadService {
   private static async loadOwnedSession(id: string, user: AuthenticatedUser, allowExpired = false) {
     const session = await UploadSessionRepository.findOwned(id, user.id);
     if (!session) throw new ResponseError("RESOURCE_NOT_FOUND");
+    const reportSessionStatus = session.storedFile.reportUploadSessionPhoto?.session.status;
+    if (reportSessionStatus && reportSessionStatus !== UploadSessionStatus.UPLOADING) {
+      throw new ResponseError("INVALID_FILE_REFERENCE", "Sesi laporan sudah dibatalkan atau selesai.");
+    }
     if (session.expiresAt <= new Date() && !allowExpired) throw new ResponseError("UPLOAD_SESSION_EXPIRED");
     if (session.status === DriveUploadSessionStatus.EXPIRED && !allowExpired) throw new ResponseError("UPLOAD_SESSION_EXPIRED");
     if (session.storedFile.status !== StoredFileStatus.UPLOADING && session.storedFile.status !== StoredFileStatus.READY && !allowExpired) {

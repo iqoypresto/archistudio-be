@@ -1,8 +1,8 @@
+import { UploadSessionStatus } from "@prisma/client";
 import type { AuthenticatedUser } from "../../types/express.js";
 import { logger } from "../../configs/logger.config.js";
 import { ResponseError } from "../../utils/errors/response-error.util.js";
-import { cancelDriveUploadSession } from "../../utils/storage/drive-upload.adapter.js";
-import { deleteDriveFile } from "../../utils/storage/drive-file.adapter.js";
+import { cancelAndDeleteDriveUpload } from "../../utils/storage/drive-cleanup.adapter.js";
 import { decryptDriveSessionUri } from "../../utils/storage/drive-session.crypto.js";
 import { ReportUploadSessionRepository } from "./report-upload-session.repository.js";
 import { ReportRepository } from "./report.repository.js";
@@ -38,6 +38,38 @@ export class ReportUploadSessionService {
     return session;
   }
 
+  static async cancel(sessionId: string, user: AuthenticatedUser) {
+    const status = await ReportUploadSessionRepository.requestCancellation(sessionId, user.id);
+    if (!status) throw new ResponseError("RESOURCE_NOT_FOUND");
+    if (status === UploadSessionStatus.COMMITTED || status === UploadSessionStatus.FINALIZING) {
+      throw new ResponseError("INVALID_FILE_REFERENCE", "Laporan sudah terkirim atau sedang disimpan.");
+    }
+    if (status === UploadSessionStatus.CLEANED) return { cancelled: true, photosDeleted: 0, cleanupPending: false };
+
+    const photos = await ReportUploadSessionRepository.findPendingPhotos(sessionId);
+    let photosDeleted = 0;
+    let failures = 0;
+    for (const photo of photos) {
+      try {
+        const file = photo.storedFile;
+        const encryptedUri = file.uploadSession?.sessionUriCiphertext;
+        await cancelAndDeleteDriveUpload({
+          sessionUri: encryptedUri ? decryptDriveSessionUri(encryptedUri) : null,
+          driveFileId: file.driveFileId,
+          sizeBytes: file.sizeBytes,
+        });
+        await ReportUploadSessionRepository.markPhotoDeleted(photo.id, file.id);
+        photosDeleted += 1;
+      } catch (error) {
+        await ReportUploadSessionRepository.markFileDeletePending(photo.storedFile.id);
+        logger.warn("Cancelled report photo cleanup is pending", { storedFileId: photo.storedFile.id, error });
+        failures += 1;
+      }
+    }
+    if (!failures) await ReportUploadSessionRepository.markCleaned(sessionId);
+    return { cancelled: true, photosDeleted, cleanupPending: failures > 0 };
+  }
+
   static async cleanupExpired(): Promise<{ sessions: number; photosDeleted: number; failures: number }> {
     const batches = await ReportUploadSessionRepository.cleanupBatch(new Date(), CLEANUP_BATCH);
     let photosDeleted = 0;
@@ -48,8 +80,11 @@ export class ReportUploadSessionService {
         try {
           const file = photo.storedFile;
           const sessionUri = file.uploadSession?.sessionUriCiphertext;
-          if (sessionUri) await cancelDriveUploadSession(decryptDriveSessionUri(sessionUri));
-          if (file.driveFileId) await deleteDriveFile(file.driveFileId);
+          await cancelAndDeleteDriveUpload({
+            sessionUri: sessionUri ? decryptDriveSessionUri(sessionUri) : null,
+            driveFileId: file.driveFileId,
+            sizeBytes: file.sizeBytes,
+          });
           await ReportUploadSessionRepository.markPhotoDeleted(photo.id, file.id);
           photosDeleted += 1;
         } catch (error) {

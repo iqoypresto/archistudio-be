@@ -23,6 +23,28 @@ export class ReportUploadSessionRepository {
     return result.count === 1;
   }
 
+  static async requestCancellation(id: string, supervisorId: string): Promise<UploadSessionStatus | null> {
+    return prisma.$transaction(async (tx) => {
+      const session = await tx.reportUploadSession.findFirst({ where: { id, supervisorId }, select: { status: true } });
+      if (!session) return null;
+      if (session.status !== UploadSessionStatus.UPLOADING) return session.status;
+      const claimed = await tx.reportUploadSession.updateMany({
+        where: { id, supervisorId, status: UploadSessionStatus.UPLOADING },
+        data: { status: UploadSessionStatus.CLEANUP_PENDING, expiresAt: new Date() },
+      });
+      if (claimed.count) return UploadSessionStatus.CLEANUP_PENDING;
+      const current = await tx.reportUploadSession.findFirst({ where: { id, supervisorId }, select: { status: true } });
+      return current?.status ?? null;
+    });
+  }
+
+  static findPendingPhotos(sessionId: string) {
+    return prisma.reportUploadSessionPhoto.findMany({
+      where: { sessionId, status: UploadSessionPhotoStatus.PENDING },
+      include: { storedFile: { include: { uploadSession: true } } },
+    });
+  }
+
   static async claimForFinalizing(id: string, supervisorId: string, now: Date): Promise<boolean> {
     const result = await prisma.reportUploadSession.updateMany({
       where: { id, supervisorId, status: { in: [UploadSessionStatus.UPLOADING, UploadSessionStatus.FINALIZING] }, expiresAt: { gt: now } },
@@ -102,8 +124,8 @@ export class ReportUploadSessionRepository {
   static async markPhotoDeleted(photoId: string, storedFileId: string) {
     return prisma.$transaction([
       prisma.reportUploadSessionPhoto.update({ where: { id: photoId }, data: { status: UploadSessionPhotoStatus.DELETED } }),
-      prisma.storedFile.update({ where: { id: storedFileId }, data: { status: StoredFileStatus.DELETED } }),
-      prisma.driveUploadSession.updateMany({ where: { storedFileId, status: DriveUploadSessionStatus.ACTIVE }, data: { status: DriveUploadSessionStatus.CANCELLED, sessionUriCiphertext: null } }),
+      prisma.storedFile.update({ where: { id: storedFileId }, data: { status: StoredFileStatus.DELETE_PENDING } }),
+      prisma.driveUploadSession.updateMany({ where: { storedFileId }, data: { status: DriveUploadSessionStatus.CANCELLED } }),
     ]);
   }
 

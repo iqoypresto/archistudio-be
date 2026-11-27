@@ -15,6 +15,7 @@ export class UploadValidation {
       reportSessionId: z.string().uuid(),
       areaId: z.string().uuid(),
       reportDate: z.string().regex(DATE_YYYY_MM_DD),
+      photoOrder: z.number().int().min(1).max(10).default(1),
       file: fileSchema,
     }),
     officeSession: z.discriminatedUnion("purpose", [

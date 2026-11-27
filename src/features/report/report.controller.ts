@@ -9,7 +9,7 @@ import { ReportDirectService } from "./report-direct.service.js";
 import { ReportReadService } from "./report-read.service.js";
 import { ReportUploadSessionService } from "./report-upload-session.service.js";
 import { DriveStorageCleanupService } from "../upload/drive-storage-cleanup.service.js";
-import { createReportUploadSessionSchema } from "./report-upload-session.validation.js";
+import { createReportUploadSessionSchema, reportUploadSessionParamsSchema } from "./report-upload-session.validation.js";
 import { ReportUnlockService } from "./report-unlock.service.js";
 import {
   unlockAreaBodySchema,
@@ -70,6 +70,13 @@ export class ReportController {
     const body = validate(createReportUploadSessionSchema, req.body);
     const result = await ReportUploadSessionService.create(body, req.user);
     ResponseHelper.created(res, COMMON_MESSAGES.CREATED, { sessionId: result.id, expiresAt: result.expiresAt.toISOString() });
+  }
+
+  static async cancelUploadSession(req: Request, res: Response): Promise<void> {
+    if (!req.user) throw new ResponseError("AUTHENTICATION_REQUIRED");
+    const { sessionId } = validate(reportUploadSessionParamsSchema, req.params);
+    const result = await ReportUploadSessionService.cancel(sessionId, req.user);
+    ResponseHelper.ok(res, COMMON_MESSAGES.UPDATED, result);
   }
 
   static async cleanupUploadSessions(_req: Request, res: Response): Promise<void> {

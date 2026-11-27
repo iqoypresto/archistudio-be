@@ -15,6 +15,12 @@ reportRouter.post(
   ReportController.createUploadSession,
 );
 
+reportRouter.delete(
+  "/upload-sessions/:sessionId",
+  AuthMiddleware.authorizeRoles(Role.SUPERVISOR, Role.SITE_MANAGER),
+  ReportController.cancelUploadSession,
+);
+
 reportRouter.get(
   "/archive",
   AuthMiddleware.authorizeRoles(Role.OWNER, Role.ADMIN),

@@ -1,4 +1,4 @@
-import { DriveUploadSessionStatus, StoredFileStatus, UploadSessionPhotoStatus, type StoragePurpose, type StorageTargetType } from "@prisma/client";
+import { DriveUploadSessionStatus, StoredFileStatus, UploadSessionPhotoStatus, UploadSessionStatus, type StoragePurpose, type StorageTargetType } from "@prisma/client";
 import { prisma } from "../../configs/prisma-client.config.js";
 
 export interface CreateStoredUploadInput {
@@ -71,6 +71,13 @@ export class UploadSessionRepository {
 
   static create(input: CreateStoredUploadInput) {
     return prisma.$transaction(async (tx) => {
+      if (input.reportSessionId) {
+        const activeSession = await tx.reportUploadSession.updateMany({
+          where: { id: input.reportSessionId, status: UploadSessionStatus.UPLOADING, expiresAt: { gt: new Date() } },
+          data: { expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+        });
+        if (!activeSession.count) return null;
+      }
       const storedFile = await tx.storedFile.create({
         data: {
           driveFolderId: input.driveFolderId,
@@ -97,7 +104,7 @@ export class UploadSessionRepository {
   static findOwned(id: string, userId: string) {
     return prisma.driveUploadSession.findFirst({
       where: { id, storedFile: { uploadedById: userId } },
-      include: { storedFile: true },
+      include: { storedFile: { include: { reportUploadSessionPhoto: { include: { session: { select: { status: true } } } } } } },
     });
   }
 
@@ -136,15 +143,49 @@ export class UploadSessionRepository {
 
   static markReady(id: string, uploadedAt: Date) {
     return prisma.$transaction(async (tx) => {
-      const session = await tx.driveUploadSession.findUniqueOrThrow({ where: { id } });
+      const session = await tx.driveUploadSession.findUnique({
+        where: { id },
+        include: { storedFile: { include: { reportUploadSessionPhoto: { include: { session: { select: { status: true } } } } } } },
+      });
+      if (!session) return null;
+      const parentStatus = session.storedFile.reportUploadSessionPhoto?.session.status;
+      if (parentStatus && parentStatus !== UploadSessionStatus.UPLOADING) return null;
+      if (session.status !== DriveUploadSessionStatus.COMPLETED) return null;
+      if (session.storedFile.status !== StoredFileStatus.READY) {
+        const updated = await tx.storedFile.updateMany({
+          where: {
+            id: session.storedFileId,
+            status: StoredFileStatus.UPLOADING,
+            OR: [
+              { reportUploadSessionPhoto: null },
+              { reportUploadSessionPhoto: { is: {
+                status: UploadSessionPhotoStatus.PENDING,
+                session: { is: { status: UploadSessionStatus.UPLOADING } },
+              } } },
+            ],
+          },
+          data: { status: StoredFileStatus.READY, uploadedAt },
+        });
+        if (!updated.count) return null;
+      }
+      const uriCleared = await tx.driveUploadSession.updateMany({
+        where: { id, status: DriveUploadSessionStatus.COMPLETED },
+        data: { sessionUriCiphertext: null },
+      });
+      if (!uriCleared.count) return null;
+      return tx.driveUploadSession.findUniqueOrThrow({ where: { id } });
+    });
+  }
+
+  static async markLateCompletedFileCancelled(id: string, driveFileId: string): Promise<boolean> {
+    return prisma.$transaction(async (tx) => {
+      const session = await tx.driveUploadSession.findFirst({ where: { id, status: DriveUploadSessionStatus.CANCELLED } });
+      if (!session) return false;
       await tx.storedFile.update({
         where: { id: session.storedFileId },
-        data: { status: StoredFileStatus.READY, uploadedAt },
+        data: { driveFileId, status: StoredFileStatus.DELETE_PENDING },
       });
-      return tx.driveUploadSession.update({
-        where: { id },
-        data: { status: DriveUploadSessionStatus.COMPLETED, sessionUriCiphertext: null },
-      });
+      return true;
     });
   }
 

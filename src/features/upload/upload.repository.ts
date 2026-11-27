@@ -22,6 +22,7 @@ export class UploadRepository {
       where: { id: areaId, deletedAt: null, project: { deletedAt: null } },
       select: {
         id: true,
+        code: true,
         projectId: true,
         project: { select: { id: true, code: true } },
         assignments: { select: { supervisorId: true, startDate: true, endDate: true } },

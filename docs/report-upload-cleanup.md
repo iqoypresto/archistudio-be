@@ -13,6 +13,17 @@
 - Cleaner mengklaim session `UPLOADING`/`FINALIZING` yang kedaluwarsa menjadi `CLEANUP_PENDING`, menghapus foto pending secara idempoten, dan menandai foto sebagai `DELETED`. Foto `ATTACHED` tidak pernah dihapus.
 - Foto pending dari session committed dibersihkan setelah masa retry habis. Session `CLEANED`/`COMMITTED` berumur 30 hari dihapus dari database; record foto laporan dan objek foto yang sudah terkait tidak ikut terhapus.
 
+## Pembatalan upload
+
+- Supervisor dapat membatalkan session aktif melalui `DELETE /api/v1/reports/upload-sessions/:sessionId`. Endpoint mengubah session ke `CLEANUP_PENDING`, menghapus foto pending dari Drive, lalu menandai metadata foto sebagai `DELETED` dan file sebagai tombstone.
+- Jika penghapusan Drive gagal, foto tetap pending dan cleaner akan mencoba lagi. File yang sudah dibatalkan tetapi masih perlu direkonsiliasi Drive disimpan sebagai `DELETE_PENDING`; endpoint cleanup yang sama menjalankan `DriveStorageCleanupService` untuk menyelesaikannya.
+- FE membatalkan request chunk saat pengguna memilih keluar. Saat tab ditutup atau dimuat ulang, FE mengirim permintaan DELETE `keepalive` sebagai upaya terbaik; browser atau jaringan dapat menghentikan request tersebut, sehingga cleaner kedaluwarsa tetap menjadi jalur pemulihan.
+- Submit yang sudah masuk status `FINALIZING` atau `COMMITTED` tidak dapat dibatalkan melalui endpoint ini. Foto yang sudah `ATTACHED` tetap dipertahankan.
+
+## Nama file foto laporan
+
+Nama asli dari perangkat tidak dipakai untuk foto laporan. Backend membuat nama konsisten berbentuk `RPT-{KODE_PROYEK}-{KODE_AREA}-{YYYYMMDD}-P{URUTAN}-{ID6}.{ext}`, misalnya `RPT-PRJ01-A03-20261127-P02-8F3A1C.jpg`. Ekstensi mengikuti MIME tervalidasi, dan enam karakter acak mencegah benturan nama. UUID `storedFileId` tetap menjadi identitas utama pada relasi database.
+
 ## Scheduler hosting
 
 Set secret `UPLOAD_CLEANUP_TOKEN` (minimal 32 karakter) pada environment backend dan scheduler. Panggil endpoint berikut minimal sekali per jam dengan metode POST dan header `x-upload-cleanup-token`. Endpoint memproses paling banyak 25 session per panggilan; panggil berulang bila antrean perlu dikuras.
