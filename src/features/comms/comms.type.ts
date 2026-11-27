@@ -27,6 +27,7 @@ export interface CommsEntryItem {
   attachmentName: string | null;
   attachmentMime: string | null;
   attachmentBytes: number | null;
+  attachmentUploadedAt: Date | null;
   attachmentContentPath: string | null;
   createdBy: CommsActorSummary;
   updatedBy: CommsActorSummary | null;

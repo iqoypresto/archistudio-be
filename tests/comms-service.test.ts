@@ -62,6 +62,7 @@ const makeRawEntry = (creator: AuthenticatedUser = ownerActor, overrides: Partia
     fileName: "MoM-Revisi.pdf",
     mimeType: "application/pdf",
     sizeBytes: 120_000,
+    uploadedAt: now,
   },
   createdById: creator.id,
   updatedById: null,
@@ -100,13 +101,14 @@ describe("TASK-20 & REV-03 Comms In & Out Project — 4 Role, Audit Trail & Edit
     expect(createRes.body.data?.createdBy.id).toBe(ownerActor.id);
 
     vi.spyOn(CommsRepository, "findManyByProject").mockResolvedValue([rawEntry]);
-    const listRes = await invokeApp<ApiEnvelope<Array<{ attachmentContentPath: string }>>>(app, {
+    const listRes = await invokeApp<ApiEnvelope<Array<{ attachmentContentPath: string; attachmentUploadedAt: string }>>>(app, {
       method: "GET",
       path: `/api/v1/projects/${PROJ_ID}/comms?direction=INBOUND&dateFrom=2026-11-01&dateTo=2026-11-30`,
       headers: { Authorization: `Bearer ${makeToken(ownerActor)}` },
     });
     expect(listRes.status).toBe(200);
     expect(listRes.body.data?.[0]?.attachmentContentPath).toBe(`/files/${FILE_ID}/content`);
+    expect(listRes.body.data?.[0]?.attachmentUploadedAt).toBe(now.toISOString());
 
     vi.spyOn(CommsRepository, "findByIdWithProject").mockResolvedValue({
       ...rawEntry,

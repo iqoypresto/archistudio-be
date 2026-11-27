@@ -18,7 +18,7 @@ export const commsSelect = Prisma.validator<Prisma.CommsEntrySelect>()({
   subject: true,
   note: true,
   attachmentStoredFileId: true,
-  attachment: { select: { fileName: true, mimeType: true, sizeBytes: true } },
+  attachment: { select: { fileName: true, mimeType: true, sizeBytes: true, uploadedAt: true } },
   createdById: true,
   updatedById: true,
   createdBy: { select: { id: true, name: true, role: true } },
@@ -85,6 +85,7 @@ export function formatCommsEntry(raw: RawCommsEntry): CommsEntryItem {
     attachmentName: raw.attachment?.fileName ?? null,
     attachmentMime: raw.attachment?.mimeType ?? null,
     attachmentBytes: raw.attachment?.sizeBytes ?? null,
+    attachmentUploadedAt: raw.attachment?.uploadedAt ?? null,
     attachmentContentPath: raw.attachmentStoredFileId
       ? `/files/${raw.attachmentStoredFileId}/content`
       : null,
