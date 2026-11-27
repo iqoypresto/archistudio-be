@@ -16,6 +16,10 @@ import type {
   SubmitNewBody,
 } from "./report.type.js";
 
+function escapeLikeSearchTerm(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 /** Memastikan supervisor bertugas pada area dan tanggal target (BR-03, BR-10). */
 export function assertAssignmentOnDate(
   assignments: { supervisorId: string; startDate: Date; endDate: Date | null }[],
@@ -144,16 +148,17 @@ export function buildReportsWhere(
     };
   }
   if (query.search) {
+    const searchTerm = escapeLikeSearchTerm(query.search);
     andConditions.push({
       OR: [
-        { reportNumber: { contains: query.search, mode: "insensitive" } },
-        { progressText: { contains: query.search, mode: "insensitive" } },
-        { noWorkReason: { contains: query.search, mode: "insensitive" } },
-        { area: { name: { contains: query.search, mode: "insensitive" } } },
-        { area: { code: { contains: query.search, mode: "insensitive" } } },
-        { area: { project: { name: { contains: query.search, mode: "insensitive" } } } },
-        { area: { project: { code: { contains: query.search, mode: "insensitive" } } } },
-        { supervisor: { name: { contains: query.search, mode: "insensitive" } } },
+        { reportNumber: { contains: searchTerm, mode: "insensitive" } },
+        { progressText: { contains: searchTerm, mode: "insensitive" } },
+        { noWorkReason: { contains: searchTerm, mode: "insensitive" } },
+        { area: { name: { contains: searchTerm, mode: "insensitive" } } },
+        { area: { code: { contains: searchTerm, mode: "insensitive" } } },
+        { area: { project: { name: { contains: searchTerm, mode: "insensitive" } } } },
+        { area: { project: { code: { contains: searchTerm, mode: "insensitive" } } } },
+        { supervisor: { name: { contains: searchTerm, mode: "insensitive" } } },
       ],
     });
   }

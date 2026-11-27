@@ -4,6 +4,21 @@ import { paginationQuerySchema } from "../../validations/pagination.validation.j
 
 const DATE_YYYY_MM_DD = /^\d{4}-\d{2}-\d{2}$/;
 
+function containsControlCharacters(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x1f || codePoint === 0x7f) return true;
+  }
+  return false;
+}
+
+const reportSearchSchema = z
+  .string()
+  .trim()
+  .max(100, "Pencarian laporan maksimal 100 karakter.")
+  .refine((value) => !containsControlCharacters(value), "Pencarian tidak boleh mengandung karakter kontrol.")
+  .optional();
+
 const photoInputSchema = z.object({
   storedFileId: z.string().uuid("ID file foto tidak valid."),
   caption: z.string().trim().max(250).nullable().optional(),
@@ -32,9 +47,11 @@ export class ReportValidation {
 
   static readonly QUERY = {
     myObligations: paginationQuerySchema.extend({
+      search: reportSearchSchema,
       status: z.enum(["ALL", "LATE", "OVERDUE"]).default("ALL"),
     }),
     archive: paginationQuerySchema.extend({
+      search: reportSearchSchema,
       projectId: z.string().uuid().optional(),
       areaId: z.string().uuid().optional(),
       dateFrom: z.iso.date().optional(),
@@ -49,6 +66,7 @@ export class ReportValidation {
       message: "Tanggal akhir harus sama atau setelah tanggal awal.", path: ["dateTo"],
     }),
     list: paginationQuerySchema.extend({
+      search: reportSearchSchema,
       projectId: z.string().uuid().optional(),
       areaId: z.string().uuid().optional(),
       supervisorId: z.string().uuid().optional(),
